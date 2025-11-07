@@ -36,7 +36,7 @@ The `collect-game` script runs the same `collect.main:main` entry point defined 
 
 Controls while playing:
 - `Enter` – toggle player one between AI and keyboard control.
-- `A / S / W / D` – move left / down / up / right when player one is under keyboard control.
+- `Q / W / E / A / D / Z / X / C` – move to any of the eight neighboring cells (diagonals included).
 - `Space` – pause or resume the round.
 - `Esc` (once) – end the current round early.
 - `Esc` (twice) – exit the game.

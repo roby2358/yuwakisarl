@@ -40,18 +40,11 @@ def _adjacent_positions(position: GridPosition) -> Tuple[GridPosition, ...]:
 
 
 def _move(position: GridPosition, action: Action) -> GridPosition:
-    if action == Action.STAY:
+    delta_x, delta_y = action.delta()
+    if delta_x == 0 and delta_y == 0:
         return position
     x_pos, y_pos = position
-    if action == Action.MOVE_UP:
-        return (x_pos, y_pos - 1)
-    if action == Action.MOVE_DOWN:
-        return (x_pos, y_pos + 1)
-    if action == Action.MOVE_LEFT:
-        return (x_pos - 1, y_pos)
-    if action == Action.MOVE_RIGHT:
-        return (x_pos + 1, y_pos)
-    raise ValueError(f"Unsupported action {action}")
+    return (x_pos + delta_x, y_pos + delta_y)
 
 
 def _is_within_bounds(position: GridPosition) -> bool:

@@ -25,7 +25,7 @@ Each resource is placed randomly on the field.
 After a resource is collected or dropped, it is placed again randomly on the field to maintain ten active resources.
 The target is placed randomly on the field, but just once.
 
-A player can move with up, down, left, right to move.
+A player can move to any of the eight neighboring cells (including diagonals).
 A player can hold at most one resource or be empty handed.
 When holding a resource, a player can move it to the target.
 When a player is in a cell adjacent to the target, it releases the resource and gains a reward.
@@ -51,7 +51,7 @@ The human player may press
 # Controls
 
 There are two control modes:
-- Keyboard control with A S W D
+- Keyboard control with Q W E A D Z X C (mapping to all 8 directions)
   - Only 1 player can use the keyboard controls, the rest are AI
   - All players may be AI
 - AI control with Pufferfish AI Reinforcement Learning Framework

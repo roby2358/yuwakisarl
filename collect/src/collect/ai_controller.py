@@ -53,16 +53,24 @@ class AIController:
         return (float(px), float(py), float(rx), float(ry), float(tx), float(ty), has_resource, score)
 
     def _map_agent_action(self, raw_action: object) -> Optional[Action]:
-        if not isinstance(raw_action, int):
-            return None
-        mapping = {
-            0: Action.STAY,
-            1: Action.MOVE_UP,
-            2: Action.MOVE_DOWN,
-            3: Action.MOVE_LEFT,
-            4: Action.MOVE_RIGHT,
-        }
-        return mapping.get(raw_action)
+        if isinstance(raw_action, int):
+            mapping = {
+                0: Action.STAY,
+                1: Action.MOVE_UP,
+                2: Action.MOVE_DOWN,
+                3: Action.MOVE_LEFT,
+                4: Action.MOVE_RIGHT,
+                5: Action.MOVE_UP_LEFT,
+                6: Action.MOVE_UP_RIGHT,
+                7: Action.MOVE_DOWN_LEFT,
+                8: Action.MOVE_DOWN_RIGHT,
+            }
+            return mapping.get(raw_action)
+        if isinstance(raw_action, (tuple, list)) and len(raw_action) == 2:
+            dx, dy = raw_action
+            if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
+                return Action.from_delta(int(dx), int(dy))
+        return None
 
     def _heuristic_action(self, observation: Observation) -> Action:
         player = observation.player
@@ -79,13 +87,7 @@ class AIController:
         delta_y = gy - sy
         if delta_x == 0 and delta_y == 0:
             return Action.STAY
-        if abs(delta_x) >= abs(delta_y):
-            if delta_x > 0:
-                return Action.MOVE_RIGHT
-            return Action.MOVE_LEFT
-        if delta_y > 0:
-            return Action.MOVE_DOWN
-        return Action.MOVE_UP
+        return Action.from_delta(delta_x, delta_y)
 
     def _nearest_adjacent_cell(self, start: Tuple[int, int], target: Tuple[int, int]) -> Tuple[int, int]:
         tx, ty = target

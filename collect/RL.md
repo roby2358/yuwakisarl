@@ -1,50 +1,51 @@
-# Collect Reinforcement Learning Notes
+# Collect Reinforcement Learning
 
-This document describes how reinforcement learning fits into the Collect game. The focus here is on the game-specific dynamics, not on RL theory in general.
+This guide concentrates on how reinforcement learning plugs into Collect’s mechanics. It assumes familiarity with RL tooling and focuses on the environment that the game exposes to agents.
 
-## Environment
+## Environment Snapshot
 
-- **Observation space** – Each agent receives a compact view of the world:
+- **Agents** – Six players act simultaneously each tick. Player one can be switched to human control while the remaining five continue under AI control (or vice-versa).
+- **Observation** – Each agent receives an `Observation` object containing:
   - Player position `(px, py)`
-  - Nearest resource position `(rx, ry)` computed from the list of active resources
   - Target position `(tx, ty)`
-  - Binary flag for whether the player currently holds the resource
-  - Player score (as a float)
-- **Resource list** – The observation object also carries the full tuple of resource coordinates so custom controllers can reason about all ten resources simultaneously.
-- **Population** – Six players act each tick. Human control can replace player one, but the remaining five players are AI-driven unless reassigned.
-- **Action space** – Discrete with five options: `stay`, `move_up`, `move_down`, `move_left`, `move_right`.
-- **Episode structure** – A round lasts up to 180 seconds of real time. The environment automatically resets after each round (or when the user ends the round early). Between rounds there is a 10 second break; the next round starts with fresh placements and scores reset to zero.
+  - Coordinates for the nearest resource `(rx, ry)` (derived from the active resource list)
+  - Binary flag indicating whether the player currently holds a resource
+  - Player score (float)
+  - Full tuple of all ten active resource coordinates for richer planners
+- **Action space** – Nine discrete moves: `stay` plus the eight neighboring directions. Controllers may also emit a `(dx, dy)` pair with components in `{-1, 0, 1}`; the game maps that pair to the corresponding action.
+- **Episode length** – A round lasts up to 180 seconds of real time. After the round (or if the user ends it early), the environment resets following a 10-second intermission.
+- **Randomization** – Player, target, and resource placements are randomized at the start of every round, ensuring diverse layouts.
 
-## Rewards
+## Rewards and Dynamics
 
-- Delivering a resource to any cell adjacent (including diagonals) to the target yields a reward of `+1` and immediately respawns that resource elsewhere on the field.
-- Colliding with another player while holding the resource causes the agent to drop it. There is no direct penalty, but the resource respawns at a random location, creating an implicit cost in lost progress.
-- There are no negative time penalties or decay terms. Deliberate stalling or repeated collisions simply wastes time that could have generated more positive rewards.
+- **Delivery** – Delivering a held resource to any adjacent (including diagonal) cell around the target yields `+1` reward and immediately respawns that single resource at a fresh random location, keeping the total at ten.
+- **Collisions** – Attempting to step into another player’s cell blocks movement. If the moving player carried a resource, it is dropped and respawned randomly, introducing an implicit opportunity cost.
+- **No penalties** – There are no time-based penalties, shaping rewards, or decay terms. Wasted movement simply reduces the number of delivery opportunities.
 
-## State Transition Rules
+State transitions obey straightforward rules:
 
-1. **Movement** – Actions that would move a player off the 200×200 grid are ignored, leaving the player in place.
-2. **Cell occupancy** – Only one entity may occupy a cell. Attempting to move into an occupied cell prevents movement. If the moving player was carrying the resource, the resource is dropped and respawned elsewhere on the field.
-3. **Resource pickup** – When a player enters a resource cell, that resource is removed from the field and is considered “held” until delivery or a collision drop.
-4. **Delivery** – If the player is holding a resource and moves adjacent (including diagonals) to the target, delivery happens automatically at the end of that tick, awarding the reward and respawning that single resource at a new random location (maintaining the total of ten).
-5. **Round reset** – When a round ends, all players are repositioned randomly, scores are cleared, and a new resource/target placement is generated. Controller assignments (human vs. AI) persist across rounds.
+1. Moves that leave the 200×200 field are ignored (player stays in place).
+2. Only one entity occupies a cell at a time; blocked moves trigger the collision behaviour above.
+3. Entering a resource cell removes that resource from the field and marks the player as holding it.
+4. Delivery happens automatically whenever a holding player ends a tick adjacent to the target.
+5. At round reset, all players return to new random positions with scores cleared; controller assignments persist.
 
 ## Controller Integration
 
-- The default AI controller (`src/collect/ai_controller.py`) provides the observation vector to a `pufferfish_ai.Agent` if available. The returned integer action (0–4) is mapped into the game’s discrete action set.
-- When the Pufferfish dependency is missing, a deterministic heuristic policy acts as a fallback. The heuristic moves toward the resource when empty-handed, or toward the closest target-adjacent cell when carrying.
-- Human control can take over player one at runtime via the `Enter` key. This toggles the controller type but does not affect other agents.
+- **Default AI** – `AIController` forwards the observation to a `pufferfish_ai.Agent` if the dependency is present. Any integer 0–8 or `(dx, dy)` pair is mapped into the nine-direction action set.
+- **Heuristic fallback** – When no learned agent is available, a deterministic policy heads toward the nearest resource and then aims for the closest target-adjacent cell once loaded.
+- **Human override** – Pressing `Enter` toggles player one between human keyboard control (`Q W E A D Z X C`) and AI control without affecting other players.
 
-## Training Considerations
+## Training Notes
 
-- **Episode boundaries** – Each 180-second round is a natural episode. Agents can observe the game clock to learn timing (the renderer already exposes the clock to players, but the observation vector can be extended for agents if needed).
-- **Randomization** – Starting positions for players, targets, and all ten resources are randomized every round, ensuring a diverse set of initial states and resource configurations.
-- **Simultaneity** – All agents act on the same tick. Training multiple agents simultaneously introduces non-stationarity; consider training one agent at a time or using centralized training strategies for multi-agent RL.
-- **Exploration** – Deliveries yield sparse rewards. Exploration strategies (epsilon-greedy, entropy bonuses, curriculum) may be needed for agents to reliably learn the pickup-and-delivery cycle.
+- **Non-stationarity** – All six agents move concurrently. Multi-agent training can benefit from centralized critics, population-based training, or training against scripted opponents.
+- **Exploration** – Rewards are sparse. Encourage exploration through epsilon-greedy policies, entropy bonuses, shaped auxiliary rewards (e.g., negative distance to the nearest resource/target), or curriculum strategies that simplify the task early on.
+- **Episode handling** – Treat the end-of-round reset as an episode boundary. If your framework needs explicit terminal signals, watch for the `GameState.reset_round()` call or replicate the timing logic externally.
 
-## Extensibility
+## Extending the Environment
 
-- Modify the observation encoder in `AIController._encode_observation` to include more features (e.g., distances to all resources or opponent locations) if the learning algorithm benefits from a richer state.
-- Add shaped rewards (e.g., distance to resource/target) by adjusting `GameState` to emit reward events or by wrapping the environment with a shaping layer.
-- For custom agents, replace or subclass `AIController` and use the `Observation` dataclass defined in `src/collect/types.py` for a structured view of the state.
+- Adjust `AIController._encode_observation` if your agent benefits from additional signals (other players’ positions, remaining time, etc.).
+- Emit raw `(dx, dy)` vectors from custom controllers to leverage diagonal movement without enumerating action IDs.
+- Implement reward shaping or logging hooks by wrapping `GameState.update_player` or subclassing `Game` to capture transitions before they’re applied.
+- Swap in alternative controllers by subclassing `AIController` or constructing your own policy that consumes the `Observation` dataclass.
 

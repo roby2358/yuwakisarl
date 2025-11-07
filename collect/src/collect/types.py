@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Tuple
+from typing import Dict, Tuple
 
 
 class ControllerType(Enum):
@@ -17,11 +17,28 @@ class ControllerType(Enum):
 class Action(Enum):
     """Permitted player actions per tick."""
 
-    STAY = auto()
-    MOVE_UP = auto()
-    MOVE_DOWN = auto()
-    MOVE_LEFT = auto()
-    MOVE_RIGHT = auto()
+    STAY = (0, 0)
+    MOVE_UP = (0, -1)
+    MOVE_DOWN = (0, 1)
+    MOVE_LEFT = (-1, 0)
+    MOVE_RIGHT = (1, 0)
+    MOVE_UP_LEFT = (-1, -1)
+    MOVE_UP_RIGHT = (1, -1)
+    MOVE_DOWN_LEFT = (-1, 1)
+    MOVE_DOWN_RIGHT = (1, 1)
+
+    def delta(self) -> Tuple[int, int]:
+        return self.value
+
+    @staticmethod
+    def from_delta(delta_x: int, delta_y: int) -> "Action":
+        clamped_x = max(-1, min(1, delta_x))
+        clamped_y = max(-1, min(1, delta_y))
+        mapping: Dict[Tuple[int, int], Action] = {
+            action.value: action
+            for action in Action
+        }
+        return mapping[(clamped_x, clamped_y)]
 
 
 GridPosition = Tuple[int, int]
