@@ -1,0 +1,2 @@
+"""Collect game package."""
+

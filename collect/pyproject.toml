@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "collect"
+version = "0.1.0"
+description = "Collect reinforcement learning experiment game"
+authors = [{ name = "Collect Contributors" }]
+readme = "SPEC.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pygame>=2.6.0",
+]
+
+[project.optional-dependencies]
+ai = []
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+collect-game = "collect.main:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

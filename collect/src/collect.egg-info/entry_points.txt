@@ -1,0 +1,2 @@
+[console_scripts]
+collect-game = collect.main:main
