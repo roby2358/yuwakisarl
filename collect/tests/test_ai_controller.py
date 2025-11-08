@@ -42,3 +42,9 @@ def test_default_agent_prints_pufferlib_when_available(
     assert isinstance(agent, DummyAgent)
     assert "using PufferLib agent" in captured.out
 
+
+def test_controllers_use_distinct_agents() -> None:
+    controller_one = AIController(1)
+    controller_two = AIController(2)
+
+    assert controller_one._agent is not controller_two._agent

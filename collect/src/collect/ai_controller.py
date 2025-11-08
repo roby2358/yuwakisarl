@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Sequence, Tuple
 
 from .config import FIELD_DIMENSIONS
@@ -20,11 +20,11 @@ class AIController:
     """Selects actions for an AI-controlled player."""
 
     player_identifier: int
-    shared_agent: Optional[object] = None
+    _agent: object = field(init=False)
     _encoded_state_length: int = 14
 
     def __post_init__(self) -> None:
-        self._agent = self.shared_agent if self.shared_agent is not None else self._build_agent()
+        self._agent = self._build_agent()
 
     def select_action(self, observation: Observation) -> Action:
         agent_action = self._select_agent_action(observation)

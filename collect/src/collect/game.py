@@ -39,9 +39,8 @@ class Game:
         self._escape_stage = 0
         players = self._build_players(player_count)
         self._state = GameState(players)
-        self._shared_agent = AIController.default_agent()
         self._ai_controllers: Dict[int, AIController] = {
-            player.identifier: AIController(player.identifier, shared_agent=self._shared_agent)
+            player.identifier: AIController(player.identifier)
             for player in self._state.players
         }
         self._running = True
@@ -153,7 +152,7 @@ class Game:
         if self._human_player_identifier == player.identifier:
             return self._human_controller.select_action(pressed)
         if controller is None:
-            controller = AIController(player.identifier, shared_agent=self._shared_agent)
+            controller = AIController(player.identifier)
             self._ai_controllers[player.identifier] = controller
         return controller.select_action(observation)
 
