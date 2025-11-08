@@ -18,12 +18,12 @@ The view is a playing field.
 
 It is a grid of cells. On the field are
 - six white diamonds indicating the players' positions
-- ten yellow balls indicating the resources to collect
+- fifteen yellow balls indicating the resources to collect
 - a white open circle of the same size indicating the target where the resources will be placed
 
 Each resource is placed randomly on the field.
-After a resource is collected or dropped, it is placed again randomly on the field to maintain ten active resources.
-The target is placed randomly on the field, but just once.
+After a resource is collected or dropped, it is placed again randomly on the field to maintain fifteen active resources.
+The target is fixed at the center of the field (cell 100,100).
 
 A player can move to any of the eight neighboring cells (including diagonals).
 A player can hold at most one resource or be empty handed.

@@ -6,21 +6,21 @@ This guide concentrates on how reinforcement learning plugs into Collect’s mec
 
 - **Agents** – Six players act simultaneously each tick. Player one can be switched to human control while the remaining five continue under AI control (or vice-versa).
 - **Observation** – Each agent receives an `Observation` object containing:
-  - Player position `(px, py)`
-  - Target position `(tx, ty)`
-  - Coordinates for the nearest resource `(rx, ry)` (derived from the active resource list)
+  - Normalized player, resource, and target positions
+  - Relative offsets from the player to the nearest resource (always) and to the delivery target (when carrying)
   - Binary flag indicating whether the player currently holds a resource
   - Player score (float)
-  - Full tuple of all ten active resource coordinates for richer planners
+  - Full tuple of all fifteen active resource coordinates for richer planners
 - **Action space** – Nine discrete moves: `stay` plus the eight neighboring directions. Controllers may also emit a `(dx, dy)` pair with components in `{-1, 0, 1}`; the game maps that pair to the corresponding action.
-- **Episode length** – A round lasts up to 180 seconds of real time. After the round (or if the user ends it early), the environment resets following a 10-second intermission.
-- **Randomization** – Player, target, and resource placements are randomized at the start of every round, ensuring diverse layouts.
+- **Episode length** – A round lasts up to 24 hours of real time. After the round (or if the user ends it early), the environment resets following a 10-second intermission.
+- **Randomization** – Player positions and resource placements are randomized at the start of every round, while the delivery target remains fixed at the center cell `(100, 100)`.
 
 ## Rewards and Dynamics
 
-- **Delivery** – Delivering a held resource to any adjacent (including diagonal) cell around the target yields `+1` reward and immediately respawns that single resource at a fresh random location, keeping the total at ten.
-- **Collisions** – Attempting to step into another player’s cell blocks movement. If the moving player carried a resource, it is dropped and respawned randomly, introducing an implicit opportunity cost.
-- **No penalties** – There are no time-based penalties, shaping rewards, or decay terms. Wasted movement simply reduces the number of delivery opportunities.
+- **Delivery** – Delivering a held resource to any adjacent (including diagonal) cell around the target yields `+1` reward and immediately respawns that single resource at a fresh random location, keeping the total at fifteen.
+- **Shaping feedback** – Each tick awards `+SHAPING_REWARD` (defaults to `+0.1`) when the Manhattan distance to the current objective shrinks and `-SHAPING_REWARD` (`-0.1`) otherwise. When empty-handed the objective is the nearest resource; when carrying a resource it is the closest target-adjacent cell.
+- **Collision handling** – Attempting to move into another player blocks movement. The configurable `COLLISION_PENALTY` is currently `0.0`, but collisions still drop any carried resource, forcing the player to restart the pickup-delivery loop.
+- **No decay** – Scores accrue only through deliveries. There are no time-based penalties or reward discounting inside the environment; wasted movement simply reduces the number of delivery opportunities.
 
 State transitions obey straightforward rules:
 
@@ -32,8 +32,8 @@ State transitions obey straightforward rules:
 
 ## Controller Integration
 
-- **Default AI** – `AIController` forwards the observation to a `pufferfish_ai.Agent` if the dependency is present. Any integer 0–8 or `(dx, dy)` pair is mapped into the nine-direction action set.
-- **Heuristic fallback** – When no learned agent is available, a deterministic policy heads toward the nearest resource and then aims for the closest target-adjacent cell once loaded.
+- **Default AI** – `AIController` now builds a shared `CollectPufferAgent` (see `collect.puffer_agent`) whenever `pufferlib`, `torch`, and `gymnasium` are available. The agent wraps `pufferlib.models.Default`, samples discrete actions with a categorical policy, and applies lightweight policy/value updates on every reward signal. All AI-controlled players share the same instance so collected experience amortises across the team.
+- **Fallback learner** – If the PufferLib toolchain is missing or fails to initialise, `AIController` falls back to the in-repo `NeuralPolicyAgent`, a single-hidden-layer policy-gradient learner that explores with ε-greedy sampling (ε starts near 0.8 and decays slowly to keep some exploration alive).
 - **Human override** – Pressing `Enter` toggles player one between human keyboard control (`Q W E A D Z X C`) and AI control without affecting other players.
 
 ## Training Notes

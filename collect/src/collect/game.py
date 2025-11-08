@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import pygame
 
@@ -39,8 +39,10 @@ class Game:
         self._escape_stage = 0
         players = self._build_players(player_count)
         self._state = GameState(players)
+        self._shared_agent = AIController.default_agent()
         self._ai_controllers: Dict[int, AIController] = {
-            player.identifier: AIController(player.identifier) for player in self._state.players
+            player.identifier: AIController(player.identifier, shared_agent=self._shared_agent)
+            for player in self._state.players
         }
         self._running = True
 
@@ -122,22 +124,37 @@ class Game:
     def _tick_players(self) -> None:
         pressed = pygame.key.get_pressed()
         for index, player in enumerate(self._state.players):
-            action = self._select_action(player, pressed)
-            self._state.update_player(index, action)
+            controller = self._ai_controllers.get(player.identifier)
+            observation = Observation(
+                player=player,
+                players=self._state.players,
+                resources=self._state.resources,
+                target=self._state.target,
+            )
+            action = self._select_action(player, pressed, controller, observation)
+            reward = self._state.update_player(index, action)
+            controller = self._ai_controllers.get(player.identifier)
+            if controller is not None and self._human_player_identifier != player.identifier:
+                next_observation = Observation(
+                    player=self._state.players[index],
+                    players=self._state.players,
+                    resources=self._state.resources,
+                    target=self._state.target,
+                )
+                controller.observe(reward, next_observation)
 
-    def _select_action(self, player: Player, pressed: pygame.key.ScancodeWrapper) -> Action:
+    def _select_action(
+        self,
+        player: Player,
+        pressed: pygame.key.ScancodeWrapper,
+        controller: Optional[AIController],
+        observation: Observation,
+    ) -> Action:
         if self._human_player_identifier == player.identifier:
             return self._human_controller.select_action(pressed)
-        controller = self._ai_controllers.get(player.identifier)
         if controller is None:
-            controller = AIController(player.identifier)
+            controller = AIController(player.identifier, shared_agent=self._shared_agent)
             self._ai_controllers[player.identifier] = controller
-        observation = Observation(
-            player=player,
-            players=self._state.players,
-            resources=self._state.resources,
-            target=self._state.target,
-        )
         return controller.select_action(observation)
 
     def _round_break(self) -> None:

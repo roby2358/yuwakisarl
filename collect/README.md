@@ -6,8 +6,9 @@ Collect is a real-time reinforcement learning playground built with pygame. Play
 - Simultaneous real-time play with multiple players.
 - Deterministic, testable game-state logic separated from rendering.
 - Six active players per round; toggle player one between human and AI control at runtime.
-- Optional keyboard control for player one; remaining players use heuristic or custom AI controllers.
-- Default round spawns six players with ten resources distributed randomly across the grid.
+- Optional keyboard control for player one; remaining players share a built-in neural policy (with relative-position features and tuned ε-greedy exploration) or use custom controllers.
+- Default round spawns six players with fifteen resources distributed randomly across the grid and a fixed target at the center (100, 100).
+- Built-in shaping reward now gives +0.1 for steps that reduce distance to the current objective and -0.1 otherwise, with a -1.0 penalty for colliding with another player (wall penalties currently disabled while we investigate behaviour).
 - Pause/resume, round timing, collision penalties, and diagonal delivery scoring rules from `SPEC.md`.
 
 ## Requirements
@@ -41,7 +42,7 @@ Controls while playing:
 - `Esc` (once) – end the current round early.
 - `Esc` (twice) – exit the game.
 
-Rounds last three minutes with a ten-second break before the next round starts.
+Rounds last 24 hours with a ten-second break before the next round starts, giving on-policy learners plenty of experience per episode.
 
 ## Tests
 ```bash

@@ -11,10 +11,11 @@ readme = "SPEC.md"
 requires-python = ">=3.10"
 dependencies = [
     "pygame>=2.6.0",
+    "numpy>=1.26.0",
+    "pufferlib>=3.0.0; platform_system != \"Windows\"",
 ]
 
 [project.optional-dependencies]
-ai = []
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]
@@ -29,3 +30,4 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+norecursedirs = ["resources", "tmp_puffer"]

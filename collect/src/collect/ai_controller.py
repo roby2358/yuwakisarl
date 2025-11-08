@@ -1,4 +1,4 @@
-"""AI controller integration with the Pufferfish framework."""
+"""AI controller integration with optional PufferLib agents."""
 
 from __future__ import annotations
 
@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
 
 from .config import FIELD_DIMENSIONS
-from .types import Action, Observation
+from .neural_agent import NeuralPolicyAgent
+from .types import Action, Observation, Player
 
 try:
-    from pufferfish_ai import Agent as PufferfishAgent  # type: ignore
+    from .puffer_agent import CollectPufferAgent
 except ImportError:  # pragma: no cover - optional dependency
-    PufferfishAgent = None  # type: ignore[misc]
+    CollectPufferAgent = None  # type: ignore[misc]
 
 
 @dataclass
@@ -19,28 +20,49 @@ class AIController:
     """Selects actions for an AI-controlled player."""
 
     player_identifier: int
+    shared_agent: Optional[object] = None
+    _encoded_state_length: int = 14
 
     def __post_init__(self) -> None:
-        self._agent = self._build_agent()
+        self._agent = self.shared_agent if self.shared_agent is not None else self._build_agent()
 
     def select_action(self, observation: Observation) -> Action:
-        if self._agent is not None:
-            agent_action = self._select_agent_action(observation)
-            if agent_action is not None:
-                return agent_action
-        return self._heuristic_action(observation)
+        agent_action = self._select_agent_action(observation)
+        if agent_action is not None:
+            return agent_action
+        return Action.STAY
 
-    def _build_agent(self) -> Optional["PufferfishAgent"]:
-        if PufferfishAgent is None:
+    @classmethod
+    def default_agent(cls) -> object:
+        agent = cls._build_puffer_agent()
+        if agent is not None:
+            return agent
+        print("AIController: using built-in neural agent")
+        return NeuralPolicyAgent(state_size=cls._encoded_state_length, action_size=len(Action))
+
+    @classmethod
+    def _build_puffer_agent(cls) -> Optional[object]:
+        if CollectPufferAgent is None:
             return None
-        return PufferfishAgent()
+        try:
+            agent = CollectPufferAgent(state_size=cls._encoded_state_length, action_size=len(Action))
+        except Exception:  # pragma: no cover - defensive
+            return None
+        print("AIController: using PufferLib agent")
+        return agent
+
+    def _build_agent(self) -> object:
+        return self.default_agent()
 
     def _select_agent_action(self, observation: Observation) -> Optional[Action]:
         agent = self._agent
         if agent is None:
             return None
         state_vector = self._encode_observation(observation)
-        raw_action = agent.act(state_vector)  # type: ignore[attr-defined]
+        try:
+            raw_action = agent.act(state_vector, self.player_identifier)  # type: ignore[attr-defined]
+        except TypeError:
+            raw_action = agent.act(state_vector)  # type: ignore[attr-defined]
         return self._map_agent_action(raw_action)
 
     def _encode_observation(self, observation: Observation) -> Sequence[float]:
@@ -48,9 +70,43 @@ class AIController:
         px, py = player.position
         tx, ty = observation.target
         rx, ry = self._nearest_resource(player.position, observation.resources)
+        nearest_player_offset = self._nearest_player_offset(player, observation.players)
+        width = max(1, FIELD_DIMENSIONS.width - 1)
+        height = max(1, FIELD_DIMENSIONS.height - 1)
+        px_n = float(px) / width
+        py_n = float(py) / height
+        rx_n = float(rx) / width
+        ry_n = float(ry) / height
+        tx_n = float(tx) / width
+        ty_n = float(ty) / height
+        dx_resource = (rx - px) / width
+        dy_resource = (ry - py) / height
+        dx_player = nearest_player_offset[0] / width
+        dy_player = nearest_player_offset[1] / height
+        if player.has_resource:
+            dx_target = (tx - px) / width
+            dy_target = (ty - py) / height
+        else:
+            dx_target = dx_resource
+            dy_target = dy_resource
         has_resource = 1.0 if player.has_resource else 0.0
         score = float(player.score)
-        return (float(px), float(py), float(rx), float(ry), float(tx), float(ty), has_resource, score)
+        return (
+            px_n,
+            py_n,
+            rx_n,
+            ry_n,
+            tx_n,
+            ty_n,
+            dx_resource,
+            dy_resource,
+            dx_target,
+            dy_target,
+            dx_player,
+            dy_player,
+            has_resource,
+            score,
+        )
 
     def _map_agent_action(self, raw_action: object) -> Optional[Action]:
         if isinstance(raw_action, int):
@@ -72,48 +128,6 @@ class AIController:
                 return Action.from_delta(int(dx), int(dy))
         return None
 
-    def _heuristic_action(self, observation: Observation) -> Action:
-        player = observation.player
-        if player.has_resource:
-            target_cell = self._nearest_adjacent_cell(player.position, observation.target)
-            return self._step_towards(player.position, target_cell)
-        nearest_resource = self._nearest_resource(player.position, observation.resources)
-        return self._step_towards(player.position, nearest_resource)
-
-    def _step_towards(self, start: Tuple[int, int], goal: Tuple[int, int]) -> Action:
-        sx, sy = start
-        gx, gy = goal
-        delta_x = gx - sx
-        delta_y = gy - sy
-        if delta_x == 0 and delta_y == 0:
-            return Action.STAY
-        return Action.from_delta(delta_x, delta_y)
-
-    def _nearest_adjacent_cell(self, start: Tuple[int, int], target: Tuple[int, int]) -> Tuple[int, int]:
-        tx, ty = target
-        candidates = [
-            (tx - 1, ty - 1),
-            (tx, ty - 1),
-            (tx + 1, ty - 1),
-            (tx - 1, ty),
-            (tx + 1, ty),
-            (tx - 1, ty + 1),
-            (tx, ty + 1),
-            (tx + 1, ty + 1),
-        ]
-        valid_candidates = [candidate for candidate in candidates if self._is_valid(candidate)]
-        if not valid_candidates:
-            return start
-        return min(valid_candidates, key=lambda cell: self._distance_squared(start, cell))
-
-    def _is_valid(self, cell: Tuple[int, int]) -> bool:
-        x_pos, y_pos = cell
-        if x_pos < 0 or y_pos < 0:
-            return False
-        if x_pos >= FIELD_DIMENSIONS.width or y_pos >= FIELD_DIMENSIONS.height:
-            return False
-        return True
-
     def _distance_squared(self, start: Tuple[int, int], end: Tuple[int, int]) -> float:
         dx = start[0] - end[0]
         dy = start[1] - end[1]
@@ -125,4 +139,27 @@ class AIController:
         if not resources:
             return position
         return min(resources, key=lambda resource: self._distance_squared(position, resource))
+
+    def _nearest_player_offset(self, player: Player, players: Tuple[Player, ...]) -> Tuple[int, int]:
+        candidates = [other for other in players if other.identifier != player.identifier]
+        if not candidates:
+            return (0, 0)
+        closest = min(candidates, key=lambda other: self._distance_squared(player.position, other.position))
+        return (closest.position[0] - player.position[0], closest.position[1] - player.position[1])
+
+    def observe(self, reward: float, next_observation: Observation) -> None:
+        agent = self._agent
+        if agent is None:
+            return
+        next_state = self._encode_observation(next_observation)
+        if hasattr(agent, "learn"):
+            try:
+                agent.learn(reward, next_state, self.player_identifier)  # type: ignore[attr-defined]
+            except TypeError:
+                agent.learn(reward, next_state)  # type: ignore[attr-defined]
+        elif hasattr(agent, "observe"):
+            try:
+                agent.observe(reward, next_state, self.player_identifier)  # type: ignore[attr-defined]
+            except TypeError:
+                agent.observe(reward, next_state)  # type: ignore[attr-defined]
 

@@ -1,6 +1,8 @@
 pygame>=2.6.0
+numpy>=1.26.0
 
-[ai]
+[:platform_system != "Windows"]
+pufferlib>=3.0.0
 
 [dev]
 pytest>=8.0.0

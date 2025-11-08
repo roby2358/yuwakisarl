@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, replace
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
-from .config import FIELD_DIMENSIONS
+from .config import (
+    COLLISION_PENALTY,
+    FIELD_DIMENSIONS,
+    SHAPING_REWARD,
+    SHAPING_REWARD_CLOSE,
+    SHAPING_REWARD_CLOSE_DISTANCE,
+)
 from .types import Action, ControllerType, GridPosition, Player
 
 
@@ -39,12 +45,22 @@ def _adjacent_positions(position: GridPosition) -> Tuple[GridPosition, ...]:
     return tuple(neighbors)
 
 
+def _target_exclusion_zone(target: GridPosition) -> Tuple[GridPosition, ...]:
+    zone = {target}
+    zone.update(_adjacent_positions(target))
+    return tuple(zone)
+
+
 def _move(position: GridPosition, action: Action) -> GridPosition:
     delta_x, delta_y = action.delta()
     if delta_x == 0 and delta_y == 0:
         return position
     x_pos, y_pos = position
     return (x_pos + delta_x, y_pos + delta_y)
+
+
+def _manhattan_distance(a: GridPosition, b: GridPosition) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
 def _is_within_bounds(position: GridPosition) -> bool:
@@ -106,7 +122,7 @@ class GameState:
             target=self._objects.target,
         )
 
-    def update_player(self, player_index: int, action: Action) -> None:
+    def update_player(self, player_index: int, action: Action) -> float:
         if player_index < 0 or player_index >= len(self._objects.players):
             raise IndexError("Player index out of range")
         if not isinstance(action, Action):
@@ -114,18 +130,27 @@ class GameState:
 
         current_objects = self._objects
         player = current_objects.players[player_index]
+        before_score = player.score
+        before_distance = self._distance_to_goal(player, current_objects.resources, current_objects.target)
         desired_position = _move(player.position, action)
-        if desired_position == player.position:
-            self._deliver_if_ready(player_index)
-            return
-        if not _is_within_bounds(desired_position):
-            self._deliver_if_ready(player_index)
-            return
-        if desired_position in current_objects.to_position_map():
-            self._handle_collision(player_index)
-            return
-        self._objects = self._apply_move(player_index, desired_position)
+        penalty = 0.0
+        if desired_position != player.position:
+            if not _is_within_bounds(desired_position):
+                penalty += 0.0
+            else:
+                if player.has_resource and desired_position in current_objects.resources:
+                    desired_position = player.position
+                else:
+                    occupancy = current_objects.to_position_map()
+                    if desired_position in occupancy:
+                        self._handle_collision(player_index)
+                        penalty += COLLISION_PENALTY
+                    else:
+                        self._objects = self._apply_move(player_index, desired_position)
         self._deliver_if_ready(player_index)
+        shaping = self._shaping_reward(player_index, before_distance)
+        after_score = self._objects.players[player_index].score
+        return shaping + penalty + float(after_score - before_score)
 
     def _apply_move(self, player_index: int, position: GridPosition) -> GameObjects:
         players = list(self._objects.players)
@@ -167,7 +192,9 @@ class GameState:
             occupied.append(position)
             placements.append(replace(player, position=position, has_resource=False, score=0))
         base_players = tuple(placements)
-        target_position = self._random_cell(tuple(occupied))
+        target_x = FIELD_DIMENSIONS.width // 2
+        target_y = FIELD_DIMENSIONS.height // 2
+        target_position = (target_x, target_y)
         resources = self._initialise_resources(base_players, target_position)
         return GameObjects(players=base_players, resources=resources, target=target_position)
 
@@ -188,9 +215,33 @@ class GameState:
         target: GridPosition,
         existing_resources: Tuple[GridPosition, ...],
     ) -> GridPosition:
-        occupied = [player.position for player in players]
-        occupied.append(target)
-        occupied.extend(existing_resources)
-        resource_position = _random_cell(occupied)
+        occupied: set[GridPosition] = {player.position for player in players}
+        occupied.update(_target_exclusion_zone(target))
+        occupied.update(existing_resources)
+        resource_position = _random_cell(tuple(occupied))
         return resource_position
+
+    def _distance_to_goal(
+        self, player: Player, resources: Tuple[GridPosition, ...], target: GridPosition
+    ) -> Optional[int]:
+        if player.has_resource:
+            return _manhattan_distance(player.position, target)
+        if not resources:
+            return None
+        return min(_manhattan_distance(player.position, resource) for resource in resources)
+
+    def _shaping_reward(self, player_index: int, before_distance: Optional[int]) -> float:
+        if before_distance is None:
+            return 0.0
+        player = self._objects.players[player_index]
+        after_distance = self._distance_to_goal(player, self._objects.resources, self._objects.target)
+        if after_distance is None:
+            return 0.0
+        reward_magnitude = SHAPING_REWARD
+        proximity_distance = min(before_distance, after_distance)
+        if proximity_distance <= SHAPING_REWARD_CLOSE_DISTANCE:
+            reward_magnitude = SHAPING_REWARD_CLOSE
+        if after_distance < before_distance:
+            return reward_magnitude
+        return -reward_magnitude
 
