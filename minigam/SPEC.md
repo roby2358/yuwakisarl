@@ -54,7 +54,7 @@ A HUMAN turn indicator displays the available commands for the current dice, sum
 
 A digit always means “move or enter to that exact destination point,” and b1-6 always means “bear off from point N.”
 
-Bear-off commands consume the exact die matching the distance when available. If no exact die is present, and the player has no checkers on the bar, a higher die may be used to bear off the checker farthest back (closest to bearing off: highest-numbered for the human, lowest-numbered for the AI).
+Bear-off commands consume the exact die matching the distance when available. If no exact die is present, and the player has no checkers on the bar, a higher die may be used to bear off the checker farthest back (farthest from bearing off: lowest-numbered for the human, highest-numbered for the AI).
 If an exact die exists it must be taken before using a higher die.
 
 In each case, the "first" checker moves. From the bar, it's the "first" checker on the

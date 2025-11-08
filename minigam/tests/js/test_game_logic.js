@@ -86,17 +86,68 @@ test("listLegalMoves allows higher die for furthest checker when bar empty", () 
   assert.equal(bearMoves[0].source, 6);
 });
 
-test("listLegalMoves rejects higher die for non-furthest checker", () => {
+test("listLegalMoves forbids higher die bear when exact bear exists", () => {
+  const state = logic.createInitialState();
+  state.points[0] = { owner: logic.Players.AI, count: 1 };
+  state.points[1] = { owner: logic.Players.HUMAN, count: 1 };
+  state.points[2] = { owner: logic.Players.AI, count: 1 };
+  state.points[3] = { owner: logic.Players.HUMAN, count: 2 };
+  state.points[4] = { owner: logic.Players.HUMAN, count: 3 };
+  state.points[5] = { owner: logic.Players.HUMAN, count: 1 };
+  state.bar[logic.Players.HUMAN] = 0;
+  state.bar[logic.Players.AI] = 4;
+  state.borneOff[logic.Players.HUMAN] = 1;
+  state.borneOff[logic.Players.AI] = 2;
+
+  const moves = logic.listLegalMoves(state, logic.Players.HUMAN, 3);
+  const bearMoves = moves.filter((move) => move.kind === "bear");
+  const sources = new Set(bearMoves.map((move) => move.source));
+  assert.ok(sources.has(4));
+  assert.ok(!sources.has(6));
+});
+
+test("listLegalMoves provides exact bear when available with higher point occupied", () => {
+  const state = logic.createInitialState();
+  state.points[0] = { owner: logic.Players.AI, count: 1 };
+  state.points[1] = { owner: logic.Players.AI, count: 1 };
+  state.points[2] = { owner: null, count: 0 };
+  state.points[3] = { owner: logic.Players.HUMAN, count: 4 };
+  state.points[4] = { owner: null, count: 0 };
+  state.points[5] = { owner: logic.Players.HUMAN, count: 2 };
+  state.bar[logic.Players.HUMAN] = 0;
+  state.bar[logic.Players.AI] = 2;
+  state.borneOff[logic.Players.HUMAN] = 2;
+  state.borneOff[logic.Players.AI] = 4;
+
+  const moves = logic.listLegalMoves(state, logic.Players.HUMAN, 3);
+  const bearMoves = moves.filter((move) => move.kind === "bear");
+  assert.ok(bearMoves.some((move) => move.source === 4));
+});
+
+test("listLegalMoves uses higher die on human lowest point when no exact bear", () => {
+  const state = logic.createInitialState();
+  state.bar[logic.Players.HUMAN] = 0;
+  state.points[4] = { owner: logic.Players.HUMAN, count: 2 };
+  state.points[5] = { owner: logic.Players.HUMAN, count: 3 };
+
+  const moves = logic.listLegalMoves(state, logic.Players.HUMAN, 6);
+  const bearMoves = moves.filter((move) => move.kind === "bear");
+  const sources = new Set(bearMoves.map((move) => move.source));
+  assert.ok(sources.has(5));
+  assert.ok(!sources.has(6));
+});
+
+test("listLegalMoves rejects higher die for human checker closer to exit", () => {
   const state = logic.createInitialState();
   state.bar[logic.Players.HUMAN] = 0;
   state.points[5] = { owner: logic.Players.HUMAN, count: 1 };
   state.points[3] = { owner: logic.Players.HUMAN, count: 1 };
 
   const moves = logic.listLegalMoves(state, logic.Players.HUMAN, 5);
-  const bearMoves = moves.filter(
-    (move) => move.kind === "bear" && move.source === 4
-  );
-  assert.equal(bearMoves.length, 0);
+  const bearMoves = moves.filter((move) => move.kind === "bear");
+  const sources = new Set(bearMoves.map((move) => move.source));
+  assert.ok(sources.has(4));
+  assert.ok(!sources.has(6));
 });
 
 test("listLegalMoves allows higher die for AI furthest checker when bar empty", () => {
@@ -110,16 +161,16 @@ test("listLegalMoves allows higher die for AI furthest checker when bar empty", 
   assert.equal(bearMoves[0].source, 1);
 });
 
-test("listLegalMoves rejects higher die for AI non-furthest checker", () => {
+test("listLegalMoves uses higher die on AI highest point when no exact bear", () => {
   const state = logic.createInitialState();
   state.bar[logic.Players.AI] = 0;
   state.points[0] = { owner: logic.Players.AI, count: 1 };
   state.points[2] = { owner: logic.Players.AI, count: 1 };
 
   const moves = logic.listLegalMoves(state, logic.Players.AI, 5);
-  const bearMoves = moves.filter(
-    (move) => move.kind === "bear" && move.source === 3
-  );
-  assert.equal(bearMoves.length, 0);
+  const bearMoves = moves.filter((move) => move.kind === "bear");
+  const sources = new Set(bearMoves.map((move) => move.source));
+  assert.ok(sources.has(3));
+  assert.ok(!sources.has(1));
 });
 

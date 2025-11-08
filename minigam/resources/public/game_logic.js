@@ -33,6 +33,26 @@ function closestToExitPoint(state, player) {
   return null;
 }
 
+function farthestFromExitPoint(state, player) {
+  if (player === Players.HUMAN) {
+    for (let point = 1; point <= POINT_COUNT; point += 1) {
+      const entry = state.points[point - 1];
+      if (entry.owner === player && entry.count > 0) {
+        return point;
+      }
+    }
+    return null;
+  }
+
+  for (let point = POINT_COUNT; point >= 1; point -= 1) {
+    const entry = state.points[point - 1];
+    if (entry.owner === player && entry.count > 0) {
+      return point;
+    }
+  }
+  return null;
+}
+
 function createInitialState() {
   return {
     points: Array.from({ length: POINT_COUNT }, () => ({
@@ -116,6 +136,29 @@ function hasCheckersBehind(state, pointNumber, player) {
   return state.points
     .slice(pointNumber)
     .some((p) => p.owner === player && p.count > 0);
+}
+
+function hasExactBear(state, player, die) {
+  for (let pointNumber = 1; pointNumber <= POINT_COUNT; pointNumber += 1) {
+    const point = state.points[pointNumber - 1];
+    if (point.owner !== player || point.count === 0) {
+      continue;
+    }
+
+    if (bearingDie(pointNumber, player) !== die) {
+      continue;
+    }
+
+    const target = computeTarget(player, pointNumber, die);
+    if (
+      (player === Players.HUMAN && target >= POINT_COUNT + 1) ||
+      (player === Players.AI && target <= 0)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function applyHit(state, targetPoint, player) {
@@ -202,7 +245,7 @@ function bearOff(state, pointNumber, player) {
 
 function listLegalMoves(state, player, die) {
   const legalMoves = [];
-  const closest = closestToExitPoint(state, player);
+  const farthest = farthestFromExitPoint(state, player);
 
   if (state.bar[player] > 0) {
     const target = resolveEntryTarget(player, die);
@@ -257,8 +300,9 @@ function listLegalMoves(state, player, die) {
     if (
       die > requiredDie &&
       state.bar[player] === 0 &&
-      closest !== null &&
-      closest === pointNumber
+      farthest !== null &&
+      farthest === pointNumber &&
+      !hasExactBear(state, player, die)
     ) {
       legalMoves.push({
         kind: "bear",
@@ -318,6 +362,7 @@ const MinigamLogic = {
   computeOrigin,
   bearingDie,
   closestToExitPoint,
+  farthestFromExitPoint,
   hasCheckersBehind,
   enterFromBar,
   moveChecker,

@@ -187,6 +187,7 @@
   }
 
   let inputMachine;
+  let boardSerializer;
 
   const state = {
     board: logic.createInitialState(),
@@ -655,6 +656,70 @@
     }
   }
 
+  function tryLegacyCopy(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", true);
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    let success = false;
+    try {
+      success = document.execCommand("copy");
+    } catch (error) {
+      success = false;
+    }
+
+    document.body.removeChild(textarea);
+    return success;
+  }
+
+  function copyBoardToClipboard() {
+    if (!boardSerializer) {
+      addMessage("Copy unavailable.");
+      return;
+    }
+
+    const serialized = boardSerializer.serializeState
+      ? boardSerializer.serializeState(state)
+      : boardSerializer.serialize(state.board);
+    if (!serialized) {
+      addMessage("Copy unavailable.");
+      return;
+    }
+
+    const onSuccess = () => {
+      addMessage("Board copied to clipboard.");
+    };
+
+    const onFailure = () => {
+      addMessage("Failed to copy board.");
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(serialized)
+        .then(onSuccess)
+        .catch(() => {
+          if (tryLegacyCopy(serialized)) {
+            onSuccess();
+            return;
+          }
+          onFailure();
+        });
+      return;
+    }
+
+    if (tryLegacyCopy(serialized)) {
+      onSuccess();
+      return;
+    }
+
+    onFailure();
+  }
+
   inputMachine = new InputStateMachine({
     onRoll: () => {
       rollDice();
@@ -700,6 +765,11 @@
 
       processKey(event);
     });
+
+    $("#copy-board-link").on("click", (event) => {
+      event.preventDefault();
+      copyBoardToClipboard();
+    });
   }
 
   function renderInitialBoard() {
@@ -709,6 +779,10 @@
   }
 
   $(() => {
+    if (window.MinigamBoardSerializer) {
+      boardSerializer = new window.MinigamBoardSerializer(logic);
+    }
+
     renderInitialBoard();
   });
 })(jQuery, window.MinigamLogic, window.MinigamMoveFormatter);

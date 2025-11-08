@@ -48,7 +48,7 @@ If neither die can be played, the turn ends with no move.
 
 ## Bearing Off
 A checker normally bears off with an exact roll matching the distance from its point to the exit.
-If a player has no checkers on the bar and no die exactly matches, the player may use a higher die to bear off the checker that is farthest back (i.e., closest to bearing off: highest-numbered point for the human, lowest-numbered for the AI).
+If a player has no checkers on the bar and no die exactly matches, the player may use a higher die to bear off the checker that is farthest back (i.e., farthest from bearing off: lowest-numbered point for the human, highest-numbered for the AI).
 If there is an exact roll available it must be used, even if other checkers are farther back.
 A checker may enter from the bar and bear off in the same turn if both moves are legal.
 
