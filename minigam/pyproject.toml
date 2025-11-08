@@ -8,6 +8,12 @@ dependencies = [
     "uvicorn>=0.29.0",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.hatch.build]
+include = ["resources/public/**/*"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2.0",

@@ -15,39 +15,36 @@
   <body>
     <main>
       <h1>MINIGAM</h1>
-      <section id="board-container">
+      <section id="board-wrapper">
+        <div id="board-header">
+          <div id="dice"></div>
+          <div id="turn-indicator"></div>
+        </div>
         <div id="board">
-          <div class="point-row top">
-            <div class="point" data-point="6"></div>
-            <div class="point" data-point="5"></div>
-            <div class="point" data-point="4"></div>
-            <div class="point" data-point="3"></div>
-            <div class="point" data-point="2"></div>
-            <div class="point" data-point="1"></div>
+          <div id="left-rail" class="rail">
+            <div class="rail-label">AI Bar</div>
+            <div id="ai-bar" class="checker-stack"></div>
           </div>
-          <div id="center-strip">
-            <div id="ai-bar" class="bar">
-              <div class="bar-label">AI Bar</div>
-              <div class="checker-stack"></div>
+          <div id="point-area">
+            <div class="point-row">
+              <div class="point" data-point="1" data-ai="6"></div>
+              <div class="point" data-point="2" data-ai="5"></div>
+              <div class="point" data-point="3" data-ai="4"></div>
+              <div class="point" data-point="4" data-ai="3"></div>
+              <div class="point" data-point="5" data-ai="2"></div>
+              <div class="point" data-point="6" data-ai="1"></div>
             </div>
-            <div id="dice-area">
-              <div id="dice"></div>
-              <div id="turn-indicator"></div>
-            </div>
-            <div id="human-bar" class="bar">
-              <div class="bar-label">Human Bar</div>
-              <div class="checker-stack"></div>
-            </div>
+            <div id="mid-divider"></div>
           </div>
-          <div class="point-row bottom">
-            <div class="point" data-point="1"></div>
-            <div class="point" data-point="2"></div>
-            <div class="point" data-point="3"></div>
-            <div class="point" data-point="4"></div>
-            <div class="point" data-point="5"></div>
-            <div class="point" data-point="6"></div>
+          <div id="right-rail" class="rail">
+            <div class="rail-label">Human Bar</div>
+            <div id="human-bar" class="checker-stack"></div>
           </div>
         </div>
+      </section>
+      <section id="messages">
+        <h2>Messages</h2>
+        <div id="log"></div>
       </section>
       <section id="borne-off">
         <div>
@@ -66,10 +63,6 @@
           <li>1-6: Move or enter to that point</li>
           <li>b1-6: Bear a checker off from that point</li>
         </ul>
-      </section>
-      <section id="messages">
-        <h2>Messages</h2>
-        <div id="log"></div>
       </section>
     </main>
   </body>

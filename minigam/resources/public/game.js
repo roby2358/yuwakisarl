@@ -67,25 +67,29 @@
     $(".point").each(function renderPoint() {
       const pointNumber = Number($(this).data("point"));
       const point = state.board.points[pointNumber - 1];
-      $(this).empty();
+      const $point = $(this);
+      $point.empty();
 
-      if (!point || point.count === 0) {
-        return;
+      const aiLabel = $point.data("ai");
+      if (aiLabel) {
+        $("<div>", { class: "point-label top", text: aiLabel }).appendTo($point);
       }
+      $("<div>", { class: "point-label bottom", text: pointNumber }).appendTo($point);
 
-      const stack = $("<div>", { class: "checker-stack" });
-      for (let i = 0; i < point.count; i += 1) {
-        $("<div>", {
-          class: `checker ${point.owner}`,
-        }).appendTo(stack);
+      const stack = $("<div>", { class: "checker-stack" }).appendTo($point);
+      if (point && point.count > 0) {
+        for (let i = 0; i < point.count; i += 1) {
+          $("<div>", {
+            class: `checker ${point.owner}`,
+          }).appendTo(stack);
+        }
       }
-      $(this).append(stack);
     });
   }
 
   function renderBar() {
-    const humanStack = $("#human-bar .checker-stack");
-    const aiStack = $("#ai-bar .checker-stack");
+    const humanStack = $("#human-bar");
+    const aiStack = $("#ai-bar");
     humanStack.empty();
     aiStack.empty();
 

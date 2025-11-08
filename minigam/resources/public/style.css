@@ -28,17 +28,36 @@ h1 {
   letter-spacing: 0.2rem;
 }
 
-#board-container {
+#board-wrapper {
+  background: var(--board);
+  border-radius: 16px;
+  padding: 1.25rem;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1rem;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+  margin: 0 auto;
+  max-width: 720px;
+}
+
+#board-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0.5rem;
 }
 
 #board {
-  background: var(--board);
-  border-radius: 12px;
-  padding: 1rem;
   display: grid;
+  grid-template-columns: 80px 1fr 80px;
   gap: 1rem;
+  align-items: center;
+}
+
+#point-area {
+  display: flex;
+  flex-direction: column;
 }
 
 .point-row {
@@ -48,43 +67,38 @@ h1 {
 }
 
 .point {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  min-height: 160px;
   position: relative;
+  height: 220px;
   display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  padding: 0.5rem;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 32px 0 28px;
 }
 
-.point.top {
-  flex-direction: column-reverse;
-}
-
-.point::after {
-  content: attr(data-point);
+.point::before {
+  content: "";
   position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 0.8rem;
-  opacity: 0.6;
-}
-
-.point-row.top .point {
-  background: var(--point-top);
-}
-
-.point-row.bottom .point {
-  background: var(--point-bottom);
+  left: 0;
+  right: 0;
+  top: 16px;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.04)
+  );
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  border-radius: 6px;
 }
 
 .checker {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   margin: 4px auto;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  position: relative;
+  z-index: 2;
 }
 
 .checker.human {
@@ -95,41 +109,68 @@ h1 {
   background: var(--checker-ai);
 }
 
-#center-strip {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 1rem;
-}
-
-.bar {
-  border: 2px dashed var(--accent);
-  border-radius: 8px;
-  padding: 0.5rem;
-  min-height: 140px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.bar-label {
-  text-align: center;
-  font-size: 0.9rem;
-  opacity: 0.75;
-}
-
 .checker-stack {
   display: flex;
   flex-direction: column-reverse;
   align-items: center;
   gap: 0.3rem;
+  position: relative;
+  z-index: 2;
 }
 
-#dice-area {
+.point-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04rem;
+  opacity: 0.7;
+  z-index: 3;
+}
+
+.point-label.top {
+  top: 4px;
+}
+
+.point-label.bottom {
+  bottom: 6px;
+}
+
+.rail {
+  border: 2px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 1rem 0.75rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  min-height: 360px;
+}
+
+.rail-label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08rem;
+  opacity: 0.7;
+}
+
+#mid-divider {
+  height: 16px;
+  margin: 0.75rem 0;
+  border-radius: 999px;
+  background: radial-gradient(
+      circle at 20% 50%,
+      rgba(255, 255, 255, 0.1) 0,
+      transparent 60%
+    ),
+    radial-gradient(
+      circle at 80% 50%,
+      rgba(255, 255, 255, 0.1) 0,
+      transparent 60%
+    ),
+    rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.4);
 }
 
 .die {
@@ -148,8 +189,14 @@ h1 {
   display: flex;
 }
 
+#turn-indicator {
+  font-weight: 600;
+  color: var(--accent);
+}
+
 #messages {
-  margin-top: 2rem;
+  margin: 1.5rem auto 0;
+  max-width: 720px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   padding: 1rem;
@@ -179,14 +226,13 @@ h1 {
   margin-bottom: 0.25rem;
 }
 
-#turn-indicator {
-  font-weight: 600;
-  color: var(--accent);
-}
-
 @media (max-width: 768px) {
   main {
     padding: 1rem;
+  }
+
+  #board {
+    grid-template-columns: 60px 1fr 60px;
   }
 
   .point-row {
@@ -194,7 +240,7 @@ h1 {
   }
 
   .point {
-    min-height: 120px;
+    height: 120px;
   }
 }
 
