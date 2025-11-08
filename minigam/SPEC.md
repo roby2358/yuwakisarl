@@ -33,7 +33,7 @@ The UI MUST be rendered in this form (in graphics, not as ascii):
 +XX+ | | O | | | +OO+
 +XX+ | X O | X O +OO+
 +-+--1-2-3-4-5-6-+--+
-+[messages]-^v------+
++--------------+
 ```
 
 Checkers that have borne off are not displayed.
