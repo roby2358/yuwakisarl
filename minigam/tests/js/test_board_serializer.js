@@ -51,3 +51,19 @@ test("serializeState includes dice and player context", () => {
   );
 });
 
+test("serializeState captures expanded doubles", () => {
+  const serializer = new BoardSerializer(logic);
+  const state = {
+    board: logic.createInitialState(),
+    pendingDice: [2, 2, 2, 2],
+    diceRolled: [2, 2, 2, 2],
+    turnCompletedDice: [],
+    currentPlayer: logic.Players.AI,
+    awaitingRoll: false,
+  };
+
+  const result = serializer.serializeState(state);
+  assert.ok(result.includes("pending=2,2,2,2"));
+  assert.ok(result.includes("rolled=2,2,2,2"));
+});
+

@@ -1,4 +1,4 @@
-(function ($, logic, moveFormatter) {
+(function ($, logic, moveFormatter, Dice) {
   "use strict";
 
   const Players = logic.Players;
@@ -188,52 +188,45 @@
 
   let inputMachine;
   let boardSerializer;
+  const dice = new Dice(() => Math.floor(Math.random() * 6) + 1);
 
   const state = {
     board: logic.createInitialState(),
     currentPlayer: HUMAN,
-    pendingDice: [],
-    diceRolled: [],
-    turnCompletedDice: [],
-    awaitingRoll: true,
+    pendingDice: dice.pending,
+    diceRolled: dice.rolled,
+    turnCompletedDice: dice.completed,
+    awaitingRoll: dice.awaitingRoll,
     gameOver: false,
     turnSnapshot: null,
   };
 
-  function randomDie() {
-    return Math.floor(Math.random() * 6) + 1;
-  }
-
   function rollDice() {
-    const d1 = randomDie();
-    const d2 = randomDie();
-    state.diceRolled = [d1, d2];
-    state.pendingDice = [d1, d2];
-    state.turnCompletedDice = [];
-    state.awaitingRoll = false;
+    const rolledValues = dice.roll();
+    state.awaitingRoll = dice.awaitingRoll;
     if (inputMachine) {
       inputMachine.transitionToPrimary();
     }
     if (state.currentPlayer === HUMAN) {
       state.turnSnapshot = {
         board: logic.cloneState(state.board),
-        pendingDice: [...state.pendingDice],
+        dice: dice.snapshot(),
       };
     } else {
       state.turnSnapshot = null;
     }
-    addMessage(`${state.currentPlayer} rolled ${d1} and ${d2}.`);
+    const rollDescription = rolledValues.join(", ");
+    addMessage(`${state.currentPlayer} rolled ${rollDescription}.`);
     renderDice();
   }
 
   function resetDice() {
-    state.pendingDice = [];
-    state.diceRolled = [];
-    state.turnCompletedDice = [];
-    state.awaitingRoll = true;
+    dice.reset();
+    state.awaitingRoll = dice.awaitingRoll;
     if (inputMachine) {
       inputMachine.transitionToAwaitRoll();
     }
+    renderDice();
   }
 
   function addMessage(text) {
@@ -365,11 +358,10 @@
       return;
     }
 
-    state.board = logic.cloneState(state.turnSnapshot.board);
-    state.pendingDice = [...state.turnSnapshot.pendingDice];
-    state.diceRolled = [...state.turnSnapshot.pendingDice];
-    state.turnCompletedDice = [];
-    state.awaitingRoll = false;
+    const snapshot = state.turnSnapshot;
+    state.board = logic.cloneState(snapshot.board);
+    dice.restore(snapshot.dice);
+    state.awaitingRoll = dice.awaitingRoll;
     if (inputMachine) {
       inputMachine.transitionToPrimary();
     }
@@ -377,15 +369,23 @@
     addMessage("Turn reset.");
   }
 
-  function removeDieValue(die) {
-    const index = state.pendingDice.indexOf(die);
-    if (index === -1) {
-      return false;
+  function consumeDieValue(die) {
+    const consumption = dice.consume(die);
+    if (!consumption) {
+      return null;
     }
-    state.pendingDice.splice(index, 1);
-    state.turnCompletedDice.push(die);
+    state.awaitingRoll = dice.awaitingRoll;
     renderDice();
-    return true;
+    return consumption;
+  }
+
+  function restoreConsumedDie(consumption) {
+    if (!consumption) {
+      return;
+    }
+    dice.returnValue(consumption);
+    state.awaitingRoll = dice.awaitingRoll;
+    renderDice();
   }
 
   function maybePassAfterAction() {
@@ -393,7 +393,7 @@
       inputMachine.clearActiveCommand();
     }
 
-    if (state.pendingDice.length === 0) {
+    if (!dice.hasPending()) {
       endTurn();
       return;
     }
@@ -480,7 +480,8 @@
     }
 
     const requiredDie = logic.entryDieForTarget(HUMAN, target);
-    if (!removeDieValue(requiredDie)) {
+    const consumption = consumeDieValue(requiredDie);
+    if (!consumption) {
       addMessage(`Need a ${requiredDie} to enter on ${target}.`);
       return;
     }
@@ -492,8 +493,7 @@
       maybePassAfterAction();
     } catch (error) {
       addMessage(error.message);
-      state.pendingDice.push(requiredDie);
-      renderDice();
+      restoreConsumedDie(consumption);
     }
   }
 
@@ -535,7 +535,8 @@
       return;
     }
 
-    if (!removeDieValue(distance)) {
+    const consumption = consumeDieValue(distance);
+    if (!consumption) {
       addMessage(`Need a ${distance} to move from ${origin} to ${target}.`);
       return;
     }
@@ -547,8 +548,7 @@
       maybePassAfterAction();
     } catch (error) {
       addMessage(error.message);
-      state.pendingDice.push(distance);
-      renderDice();
+      restoreConsumedDie(consumption);
     }
   }
 
@@ -587,7 +587,8 @@
       return;
     }
 
-    if (!removeDieValue(dieToUse)) {
+    const consumption = consumeDieValue(dieToUse);
+    if (!consumption) {
       addMessage(`Die ${dieToUse} unavailable.`);
       return;
     }
@@ -597,9 +598,7 @@
       addMessage(`Borne off from point ${point} using ${dieToUse}.`);
     } catch (error) {
       addMessage(error.message);
-      state.pendingDice.push(dieToUse);
-      state.pendingDice.sort((a, b) => a - b);
-      renderDice();
+      restoreConsumedDie(consumption);
       return;
     }
 
@@ -619,13 +618,13 @@
       const available = logic.listLegalMoves(state.board, AI, die);
       if (available.length === 0) {
         addMessage(`AI passes on die ${die}.`);
-        removeDieValue(die);
+        consumeDieValue(die);
         return;
       }
 
       const choice = available[Math.floor(Math.random() * available.length)];
       logic.applyMove(state.board, choice, AI);
-      removeDieValue(die);
+      consumeDieValue(die);
 
       if (choice.kind === "enter") {
         addMessage(`AI enters on ${choice.target}.`);
@@ -785,5 +784,5 @@
 
     renderInitialBoard();
   });
-})(jQuery, window.MinigamLogic, window.MinigamMoveFormatter);
+})(jQuery, window.MinigamLogic, window.MinigamMoveFormatter, window.MinigamDice);
 

@@ -21,7 +21,7 @@ On their turn a player rolls two dice.
 
 Each die is a separate move. A player may move one checker twice (in the chosen die order) or move two different checkers.
 
-Doubles count as two equal moves (no extra moves).
+Doubles count as four equal moves.
 
 ## Entering from the Bar
 A checker on the bar may enter using a die that corresponds to an open point in that player’s entry direction.
