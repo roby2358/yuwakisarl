@@ -39,10 +39,17 @@
 
   function addMessage(text) {
     const $log = $("#log");
+    const logElement = $log.get(0);
+    const previousScrollHeight = logElement ? logElement.scrollHeight : 0;
+    const previousScrollTop = logElement ? $log.scrollTop() : 0;
     const timestamp = new Date().toLocaleTimeString();
     $("<div>", { class: "message", text: `[${timestamp}] ${text}` }).prependTo(
       $log
     );
+    if (logElement) {
+      const heightDelta = logElement.scrollHeight - previousScrollHeight;
+      $log.scrollTop(previousScrollTop + heightDelta);
+    }
   }
 
   function renderDice() {
@@ -102,23 +109,9 @@
     }
   }
 
-  function renderBorneOff() {
-    const humanOff = $("#human-off");
-    const aiOff = $("#ai-off");
-    humanOff.empty();
-    aiOff.empty();
-    for (let i = 0; i < state.board.borneOff[HUMAN]; i += 1) {
-      $("<div>", { class: "checker human" }).appendTo(humanOff);
-    }
-    for (let i = 0; i < state.board.borneOff[AI]; i += 1) {
-      $("<div>", { class: "checker ai" }).appendTo(aiOff);
-    }
-  }
-
   function renderBoard() {
     renderPoints();
     renderBar();
-    renderBorneOff();
     renderDice();
   }
 
@@ -131,6 +124,19 @@
     state.turnCompletedDice.push(die);
     renderDice();
     return true;
+  }
+
+  function maybePassAfterAction() {
+    if (state.pendingDice.length === 0) {
+      endTurn();
+      return;
+    }
+
+    const remainingMoves = availableMovesForPlayer(state.pendingDice, HUMAN);
+    if (remainingMoves.length === 0) {
+      addMessage("No legal moves remain. Passing turn.");
+      endTurn();
+    }
   }
 
   function winCheck(player) {
@@ -193,9 +199,7 @@
       logic.enterFromBar(state.board, target, HUMAN);
       addMessage(`Entered on point ${target}.`);
       renderBoard();
-      if (state.pendingDice.length === 0) {
-        endTurn();
-      }
+      maybePassAfterAction();
       return;
     }
 
@@ -219,9 +223,7 @@
     logic.moveChecker(state.board, origin, target, HUMAN);
     addMessage(`Moved from ${origin} to ${target}.`);
     renderBoard();
-    if (state.pendingDice.length === 0) {
-      endTurn();
-    }
+    maybePassAfterAction();
   }
 
   function withinBoard(point) {
@@ -259,15 +261,7 @@
     }
 
     renderBoard();
-    if (state.pendingDice.length === 0) {
-      endTurn();
-    }
-  }
-
-  function playerHasMoves(player, dice) {
-    return dice.some(
-      (die) => logic.listLegalMoves(logic.cloneState(state.board), player, die).length > 0
-    );
+    maybePassAfterAction();
   }
 
   function runAiTurn() {
@@ -303,7 +297,9 @@
     endTurn();
   }
 
-  function processKey(key) {
+  function processKey(event) {
+    const key = event.key.toLowerCase();
+
     if (state.gameOver) {
       addMessage("Game over. Refresh to restart.");
       return;
@@ -315,9 +311,18 @@
     }
 
     if (key === " ") {
+      event.preventDefault();
+      event.stopPropagation();
+
       if (!state.awaitingRoll) {
         if (state.pendingDice.length === 0) {
           addMessage("Turn passed to AI.");
+          endTurn();
+          return;
+        }
+        const remaining = availableMovesForPlayer(state.pendingDice, HUMAN);
+        if (remaining.length === 0) {
+          addMessage("No legal moves remain. Passing turn.");
           endTurn();
           return;
         }
@@ -336,6 +341,7 @@
     }
 
     if (key.startsWith("b")) {
+      event.preventDefault();
       const point = key.slice(1);
       performHumanBearOff(point);
       return;
@@ -343,6 +349,7 @@
 
     const digit = Number(key);
     if (Number.isInteger(digit) && withinBoard(digit)) {
+      event.preventDefault();
       performHumanMoveTo(digit);
     }
   }
@@ -358,7 +365,7 @@
         return;
       }
 
-      processKey(event.key.toLowerCase());
+      processKey(event);
     });
   }
 

@@ -32,3 +32,13 @@ test("listLegalMoves identifies bearing off opportunity", () => {
   assert.equal(moves[0].kind, "bear");
 });
 
+test("listLegalMoves returns empty when target point is blocked", () => {
+  const state = logic.createInitialState();
+  state.bar[logic.Players.HUMAN] = 0;
+  state.points[0] = { owner: logic.Players.HUMAN, count: 1 };
+  state.points[2] = { owner: logic.Players.AI, count: 2 };
+
+  const moves = logic.listLegalMoves(state, logic.Players.HUMAN, 2);
+  assert.equal(moves.length, 0);
+});
+
