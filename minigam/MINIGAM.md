@@ -10,6 +10,9 @@ Players move in opposite directions. For one player, the points are numbered 1 â
 ## Setup
 All 8 checkers for each player begin on that playerâ€™s bar.
 
+Each player rolls a die. The highest roll goes first, using the dice that were rolled.
+If doubles, roll again until a player gets the highest roll.
+
 ## Object of the Game
 Bear off all 8 checkers.
 
