@@ -1,4 +1,4 @@
-(function ($, logic) {
+(function ($, logic, moveFormatter) {
   "use strict";
 
   const Players = logic.Players;
@@ -84,6 +84,15 @@
     handle(event) {
       const rawKey = event.key;
       if (!rawKey || rawKey.length === 0) {
+        return;
+      }
+
+      if (rawKey === "Escape" || rawKey === "Esc") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.actions.onForcePass) {
+          this.actions.onForcePass();
+        }
         return;
       }
 
@@ -254,9 +263,7 @@
     if (state.pendingDice.length === 0 && !state.awaitingRoll) {
       $("<div>", { class: "die", text: "—" }).appendTo($dice);
     }
-    $("#turn-indicator").text(
-      state.gameOver ? "Game Over" : `${state.currentPlayer.toUpperCase()} Turn`
-    );
+    renderTurnIndicator();
   }
 
   function renderPoints() {
@@ -302,6 +309,53 @@
     renderPoints();
     renderBar();
     renderDice();
+  }
+
+  function summarizeHumanMoves() {
+    if (state.currentPlayer !== HUMAN) {
+      return null;
+    }
+
+    if (state.awaitingRoll) {
+      return "roll (space)";
+    }
+
+    if (state.pendingDice.length === 0) {
+      return "no dice pending";
+    }
+
+    const moves = availableMovesForPlayer(state.pendingDice, HUMAN);
+    if (moves.length === 0) {
+      return "no legal moves";
+    }
+
+    if (!moveFormatter || typeof moveFormatter.summarizeMoves !== "function") {
+      return "moves unavailable";
+    }
+
+    return moveFormatter.summarizeMoves(moves);
+  }
+
+  function renderTurnIndicator() {
+    const $indicator = $("#turn-indicator");
+    if (state.gameOver) {
+      $indicator.text("Game Over");
+      return;
+    }
+
+    const base = `${state.currentPlayer.toUpperCase()} Turn`;
+    if (state.currentPlayer !== HUMAN) {
+      $indicator.text(base);
+      return;
+    }
+
+    const detail = summarizeHumanMoves();
+    if (!detail) {
+      $indicator.text(base);
+      return;
+    }
+
+    $indicator.text(`${base} - ${detail}`);
   }
 
   function resetTurnState() {
@@ -362,6 +416,18 @@
 
   function availableMovesForPlayer(dice, player) {
     return dice.flatMap((die) => logic.listLegalMoves(state.board, player, die));
+  }
+
+  function forcePassTurn() {
+    if (state.gameOver) {
+      return;
+    }
+    if (state.currentPlayer !== HUMAN) {
+      return;
+    }
+
+    addMessage("Force pass (ESC).");
+    endTurn();
   }
 
   function endTurn() {
@@ -616,6 +682,9 @@
     onPromptRoll: () => {
       addMessage("Roll first (space).");
     },
+    onForcePass: () => {
+      forcePassTurn();
+    },
   });
 
   function setupInitialMessages() {
@@ -642,5 +711,5 @@
   $(() => {
     renderInitialBoard();
   });
-})(jQuery, window.MinigamLogic);
+})(jQuery, window.MinigamLogic, window.MinigamMoveFormatter);
 

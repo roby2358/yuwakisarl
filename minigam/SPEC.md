@@ -42,12 +42,15 @@ Checkers that have borne off are not displayed.
 
 Character input during the AI turn are ignored.
 Space to roll on your turn
+ESC to force pass and immediately end your turn, leaving the board unchanged
 1-6 to enter a checker from the bar
 Consecutive key presses move or bear off. Any unrecognized characters are ignored.
 b + 1-6 to bear a checker off from that point
 m + 1-6 + 1-6 to move a checker from the first point to the second point
 Space again restores dice and board state for the current turn. Messages remain but an "reset" message appears.
 Invalid moves are reported in messages.
+
+A HUMAN turn indicator displays the available commands for the current dice, summarizing the legal entries, moves, and bear offs that can be made.
 
 A digit always means “move or enter to that exact destination point,” and b1-6 always means “bear off from point N.”
 
@@ -57,6 +60,8 @@ If an exact die exists it must be taken before using a higher die.
 In each case, the "first" checker moves. From the bar, it's the "first" checker on the
 bar (they are really more of a count). From a made point it's the "top" checker. When
 a blot moves, it's just that checker.
+
+Pressing ESC triggers a force pass that ends the turn immediately and leaves the board exactly as it currently stands, even if legal moves are available.
 
 The points are numbered, so the human player moves from bar -> 1 -> 6 -> bear off.
 
