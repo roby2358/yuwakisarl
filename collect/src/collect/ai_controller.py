@@ -46,6 +46,11 @@ class AIController:
             return None
         try:
             agent = CollectPufferAgent(state_size=cls._encoded_state_length, action_size=len(Action))
+        except TypeError:
+            try:
+                agent = CollectPufferAgent()  # type: ignore[call-arg]
+            except Exception:
+                return None
         except Exception:  # pragma: no cover - defensive
             return None
         print("AIController: using PufferLib agent")
