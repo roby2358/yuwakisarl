@@ -5,6 +5,180 @@
   const HUMAN = Players.HUMAN;
   const AI = Players.AI;
 
+  const DIGIT_KEYS = new Set(["1", "2", "3", "4", "5", "6"]);
+
+  function isDigitKey(key) {
+    return DIGIT_KEYS.has(key);
+  }
+
+  class InputStateMachine {
+    constructor(actions) {
+      this.actions = actions;
+      this.mode = "await_roll";
+      this.origin = null;
+    }
+
+    transitionToAwaitRoll() {
+      this.mode = "await_roll";
+      this.origin = null;
+    }
+
+    transitionToPrimary() {
+      this.mode = "await_command";
+      this.origin = null;
+    }
+
+    startBear() {
+      this.mode = "await_bear_point";
+      this.origin = null;
+    }
+
+    startMove() {
+      this.mode = "await_move_origin";
+      this.origin = null;
+    }
+
+    storeOrigin(digit) {
+      this.origin = digit;
+      this.mode = "await_move_target";
+    }
+
+    clearActiveCommand() {
+      if (this.mode === "await_command") {
+        return;
+      }
+      if (this.mode === "await_roll") {
+        this.origin = null;
+        return;
+      }
+      this.transitionToPrimary();
+    }
+
+    handleSpace(event) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (this.mode === "await_roll") {
+        this.actions.onRoll();
+        return;
+      }
+
+      if (!this.actions.hasPendingDice()) {
+        this.actions.onPassTurn();
+        return;
+      }
+
+      this.actions.onResetTurn();
+      this.transitionToPrimary();
+    }
+
+    handlePrimaryDigit(event, digit) {
+      event.preventDefault();
+      if (this.actions.hasBarCheckers()) {
+        this.actions.onEnter(digit);
+        return;
+      }
+      this.actions.onRequireCommand();
+    }
+
+    handle(event) {
+      const rawKey = event.key;
+      if (!rawKey || rawKey.length === 0) {
+        return;
+      }
+
+      const key = rawKey.toLowerCase();
+
+      if (key === " ") {
+        this.handleSpace(event);
+        return;
+      }
+
+      if (this.mode === "await_roll") {
+        if (isDigitKey(key) || key === "b" || key === "m") {
+          this.actions.onPromptRoll();
+        }
+        return;
+      }
+
+      if (this.mode === "await_command") {
+        if (key === "b") {
+          event.preventDefault();
+          this.startBear();
+          return;
+        }
+        if (key === "m") {
+          event.preventDefault();
+          this.startMove();
+          return;
+        }
+        if (isDigitKey(key)) {
+          this.handlePrimaryDigit(event, Number(key));
+        }
+        return;
+      }
+
+      if (this.mode === "await_bear_point") {
+        if (isDigitKey(key)) {
+          event.preventDefault();
+          this.actions.onBear(Number(key));
+          this.transitionToPrimary();
+          return;
+        }
+        if (key === "m") {
+          event.preventDefault();
+          this.startMove();
+          return;
+        }
+        if (key === "b") {
+          event.preventDefault();
+          return;
+        }
+        return;
+      }
+
+      if (this.mode === "await_move_origin") {
+        if (isDigitKey(key)) {
+          event.preventDefault();
+          this.storeOrigin(Number(key));
+          return;
+        }
+        if (key === "b") {
+          event.preventDefault();
+          this.startBear();
+          return;
+        }
+        if (key === "m") {
+          event.preventDefault();
+          return;
+        }
+        return;
+      }
+
+      if (this.mode === "await_move_target") {
+        if (isDigitKey(key)) {
+          event.preventDefault();
+          const origin = this.origin;
+          this.transitionToPrimary();
+          this.actions.onMove(origin, Number(key));
+          return;
+        }
+        if (key === "m") {
+          event.preventDefault();
+          this.startMove();
+          return;
+        }
+        if (key === "b") {
+          event.preventDefault();
+          this.startBear();
+          return;
+        }
+      }
+    }
+  }
+
+  let inputMachine;
+
   const state = {
     board: logic.createInitialState(),
     currentPlayer: HUMAN,
@@ -13,6 +187,7 @@
     turnCompletedDice: [],
     awaitingRoll: true,
     gameOver: false,
+    turnSnapshot: null,
   };
 
   function randomDie() {
@@ -26,6 +201,17 @@
     state.pendingDice = [d1, d2];
     state.turnCompletedDice = [];
     state.awaitingRoll = false;
+    if (inputMachine) {
+      inputMachine.transitionToPrimary();
+    }
+    if (state.currentPlayer === HUMAN) {
+      state.turnSnapshot = {
+        board: logic.cloneState(state.board),
+        pendingDice: [...state.pendingDice],
+      };
+    } else {
+      state.turnSnapshot = null;
+    }
     addMessage(`${state.currentPlayer} rolled ${d1} and ${d2}.`);
     renderDice();
   }
@@ -35,6 +221,9 @@
     state.diceRolled = [];
     state.turnCompletedDice = [];
     state.awaitingRoll = true;
+    if (inputMachine) {
+      inputMachine.transitionToAwaitRoll();
+    }
   }
 
   function addMessage(text) {
@@ -115,6 +304,24 @@
     renderDice();
   }
 
+  function resetTurnState() {
+    if (!state.turnSnapshot) {
+      addMessage("No moves to reset.");
+      return;
+    }
+
+    state.board = logic.cloneState(state.turnSnapshot.board);
+    state.pendingDice = [...state.turnSnapshot.pendingDice];
+    state.diceRolled = [...state.turnSnapshot.pendingDice];
+    state.turnCompletedDice = [];
+    state.awaitingRoll = false;
+    if (inputMachine) {
+      inputMachine.transitionToPrimary();
+    }
+    renderBoard();
+    addMessage("Turn reset.");
+  }
+
   function removeDieValue(die) {
     const index = state.pendingDice.indexOf(die);
     if (index === -1) {
@@ -127,6 +334,10 @@
   }
 
   function maybePassAfterAction() {
+    if (inputMachine) {
+      inputMachine.clearActiveCommand();
+    }
+
     if (state.pendingDice.length === 0) {
       endTurn();
       return;
@@ -160,6 +371,7 @@
 
     resetDice();
     state.currentPlayer = logic.opposite(state.currentPlayer);
+    state.turnSnapshot = null;
     renderBoard();
 
     if (state.currentPlayer === AI && !state.gameOver) {
@@ -179,64 +391,102 @@
     return true;
   }
 
-  function performHumanMoveTo(targetPoint) {
+  function performHumanEnter(targetPoint) {
     if (!ensureDiceAvailable()) {
       return;
     }
 
+    if (state.board.bar[HUMAN] <= 0) {
+      addMessage("No human checkers on the bar.");
+      return;
+    }
+
     const target = Number(targetPoint);
+    if (!withinBoard(target)) {
+      addMessage("Point out of range.");
+      return;
+    }
+
     if (!logic.isPointOpen(state.board, HUMAN, target)) {
       addMessage(`Point ${target} blocked.`);
       return;
     }
 
-    if (state.board.bar[HUMAN] > 0) {
-      const requiredDie = logic.entryDieForTarget(HUMAN, target);
-      if (!removeDieValue(requiredDie)) {
-        addMessage(`Need a ${requiredDie} to enter on ${target}.`);
-        return;
-      }
+    const requiredDie = logic.entryDieForTarget(HUMAN, target);
+    if (!removeDieValue(requiredDie)) {
+      addMessage(`Need a ${requiredDie} to enter on ${target}.`);
+      return;
+    }
+
+    try {
       logic.enterFromBar(state.board, target, HUMAN);
       addMessage(`Entered on point ${target}.`);
       renderBoard();
       maybePassAfterAction();
-      return;
+    } catch (error) {
+      addMessage(error.message);
+      state.pendingDice.push(requiredDie);
+      renderDice();
     }
-
-    const dieIndex = state.pendingDice.findIndex((die) => {
-      const origin = logic.computeOrigin(target, die, HUMAN);
-      return withinBoard(origin) &&
-        state.board.points[origin - 1].owner === HUMAN;
-    });
-
-    if (dieIndex === -1) {
-      addMessage(`No human checker can land on ${target}.`);
-      return;
-    }
-
-    const die = state.pendingDice[dieIndex];
-    const origin = logic.computeOrigin(target, die, HUMAN);
-    if (!removeDieValue(die)) {
-      addMessage(`Die ${die} unavailable.`);
-      return;
-    }
-    logic.moveChecker(state.board, origin, target, HUMAN);
-    addMessage(`Moved from ${origin} to ${target}.`);
-    renderBoard();
-    maybePassAfterAction();
   }
 
   function withinBoard(point) {
     return point >= 1 && point <= logic.POINT_COUNT;
   }
 
-  function performHumanBearOff(pointNumber) {
+  function performHumanMoveFromTo(originPoint, targetPoint) {
     if (!ensureDiceAvailable()) {
       return;
     }
 
-    if (state.board.bar[HUMAN] > 0) {
-      addMessage("Enter from the bar before bearing off.");
+    const origin = Number(originPoint);
+    const target = Number(targetPoint);
+    if (!withinBoard(origin) || !withinBoard(target)) {
+      addMessage("Point out of range.");
+      return;
+    }
+
+    if (origin === target) {
+      addMessage("Origin and target must differ.");
+      return;
+    }
+
+    const originPointState = state.board.points[origin - 1];
+    if (!originPointState || originPointState.owner !== HUMAN || originPointState.count === 0) {
+      addMessage(`No human checker on point ${origin}.`);
+      return;
+    }
+
+    const distance = target - origin;
+    if (distance <= 0) {
+      addMessage("Human checkers move toward higher-numbered points.");
+      return;
+    }
+
+    if (!logic.isPointOpen(state.board, HUMAN, target)) {
+      addMessage(`Point ${target} blocked.`);
+      return;
+    }
+
+    if (!removeDieValue(distance)) {
+      addMessage(`Need a ${distance} to move from ${origin} to ${target}.`);
+      return;
+    }
+
+    try {
+      logic.moveChecker(state.board, origin, target, HUMAN);
+      addMessage(`Moved from ${origin} to ${target}.`);
+      renderBoard();
+      maybePassAfterAction();
+    } catch (error) {
+      addMessage(error.message);
+      state.pendingDice.push(distance);
+      renderDice();
+    }
+  }
+
+  function performHumanBearOff(pointNumber) {
+    if (!ensureDiceAvailable()) {
       return;
     }
 
@@ -246,18 +496,44 @@
       return;
     }
 
-    const requiredDie = logic.bearingDie(point, HUMAN);
-    if (!removeDieValue(requiredDie)) {
-      addMessage(`Need a ${requiredDie} to bear off from ${point}.`);
+    const dice = [...state.pendingDice].sort((a, b) => a - b);
+    let dieToUse = null;
+    for (const die of dice) {
+      const moves = logic.listLegalMoves(state.board, HUMAN, die);
+      const match = moves.find(
+        (move) => move.kind === "bear" && move.source === point
+      );
+      if (match) {
+        dieToUse = die;
+        break;
+      }
+    }
+
+    if (dieToUse === null) {
+      const requiredDie = logic.bearingDie(point, HUMAN);
+      const highestPoint = logic.closestToExitPoint(state.board, HUMAN);
+      if (state.board.bar[HUMAN] === 0 && highestPoint === point) {
+        addMessage(`Need a ${requiredDie} or higher to bear off from ${point}.`);
+      } else {
+        addMessage(`Need an exact ${requiredDie} to bear off from ${point}.`);
+      }
+      return;
+    }
+
+    if (!removeDieValue(dieToUse)) {
+      addMessage(`Die ${dieToUse} unavailable.`);
       return;
     }
 
     try {
       logic.bearOff(state.board, point, HUMAN);
-      addMessage(`Borne off from point ${point}.`);
+      addMessage(`Borne off from point ${point} using ${dieToUse}.`);
     } catch (error) {
       addMessage(error.message);
-      state.pendingDice.push(requiredDie);
+      state.pendingDice.push(dieToUse);
+      state.pendingDice.sort((a, b) => a - b);
+      renderDice();
+      return;
     }
 
     renderBoard();
@@ -298,8 +574,6 @@
   }
 
   function processKey(event) {
-    const key = event.key.toLowerCase();
-
     if (state.gameOver) {
       addMessage("Game over. Refresh to restart.");
       return;
@@ -310,49 +584,39 @@
       return;
     }
 
-    if (key === " ") {
-      event.preventDefault();
-      event.stopPropagation();
+    if (inputMachine) {
+      inputMachine.handle(event);
+    }
+  }
 
-      if (!state.awaitingRoll) {
-        if (state.pendingDice.length === 0) {
-          addMessage("Turn passed to AI.");
-          endTurn();
-          return;
-        }
-        const remaining = availableMovesForPlayer(state.pendingDice, HUMAN);
-        if (remaining.length === 0) {
-          addMessage("No legal moves remain. Passing turn.");
-          endTurn();
-          return;
-        }
-        addMessage("Finish your dice before ending the turn.");
-        return;
-      }
-
+  inputMachine = new InputStateMachine({
+    onRoll: () => {
       rollDice();
-
       const legal = availableMovesForPlayer(state.pendingDice, HUMAN);
       if (legal.length === 0) {
         addMessage("No legal moves, passing turn.");
         endTurn();
       }
-      return;
-    }
-
-    if (key.startsWith("b")) {
-      event.preventDefault();
-      const point = key.slice(1);
-      performHumanBearOff(point);
-      return;
-    }
-
-    const digit = Number(key);
-    if (Number.isInteger(digit) && withinBoard(digit)) {
-      event.preventDefault();
-      performHumanMoveTo(digit);
-    }
-  }
+    },
+    onPassTurn: () => {
+      addMessage("Turn passed to AI.");
+      endTurn();
+    },
+    onResetTurn: () => {
+      resetTurnState();
+    },
+    hasPendingDice: () => state.pendingDice.length > 0,
+    hasBarCheckers: () => state.board.bar[HUMAN] > 0,
+    onEnter: performHumanEnter,
+    onBear: performHumanBearOff,
+    onMove: performHumanMoveFromTo,
+    onRequireCommand: () => {
+      addMessage("No command in progress. Use m + origin + target or b + point.");
+    },
+    onPromptRoll: () => {
+      addMessage("Roll first (space).");
+    },
+  });
 
   function setupInitialMessages() {
     addMessage("Welcome to MINIGAM!");

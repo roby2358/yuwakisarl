@@ -13,6 +13,26 @@ const opposite = (player) =>
 const clonePoints = (points) =>
   points.map((point) => ({ owner: point.owner, count: point.count }));
 
+function closestToExitPoint(state, player) {
+  if (player === Players.HUMAN) {
+    for (let point = POINT_COUNT; point >= 1; point -= 1) {
+      const entry = state.points[point - 1];
+      if (entry.owner === player && entry.count > 0) {
+        return point;
+      }
+    }
+    return null;
+  }
+
+  for (let point = 1; point <= POINT_COUNT; point += 1) {
+    const entry = state.points[point - 1];
+    if (entry.owner === player && entry.count > 0) {
+      return point;
+    }
+  }
+  return null;
+}
+
 function createInitialState() {
   return {
     points: Array.from({ length: POINT_COUNT }, () => ({
@@ -170,17 +190,9 @@ function moveChecker(state, originPoint, targetPoint, player) {
 }
 
 function bearOff(state, pointNumber, player) {
-  if (state.bar[player] > 0) {
-    throw new Error("Must enter from bar first");
-  }
-
   const point = state.points[pointNumber - 1];
   if (point.owner !== player || point.count === 0) {
     throw new Error("No checker to bear off");
-  }
-
-  if (hasCheckersBehind(state, pointNumber, player)) {
-    throw new Error("Cannot bear off with checkers behind");
   }
 
   decrementPoint(state, pointNumber);
@@ -190,6 +202,7 @@ function bearOff(state, pointNumber, player) {
 
 function listLegalMoves(state, player, die) {
   const legalMoves = [];
+  const closest = closestToExitPoint(state, player);
 
   if (state.bar[player] > 0) {
     const target = resolveEntryTarget(player, die);
@@ -201,7 +214,6 @@ function listLegalMoves(state, player, die) {
         die,
       });
     }
-    return legalMoves;
   }
 
   for (let pointNumber = 1; pointNumber <= POINT_COUNT; pointNumber += 1) {
@@ -224,19 +236,30 @@ function listLegalMoves(state, player, die) {
     }
 
     const isBearingOff =
-      (player === Players.HUMAN && target === POINT_COUNT + 1) ||
-      (player === Players.AI && target === 0);
+      (player === Players.HUMAN && target >= POINT_COUNT + 1) ||
+      (player === Players.AI && target <= 0);
 
     if (!isBearingOff) {
       continue;
     }
 
-    if (hasCheckersBehind(state, pointNumber, player)) {
+    const requiredDie = bearingDie(pointNumber, player);
+    if (requiredDie === die) {
+      legalMoves.push({
+        kind: "bear",
+        source: pointNumber,
+        target: "off",
+        die,
+      });
       continue;
     }
 
-    const requiredDie = bearingDie(pointNumber, player);
-    if (requiredDie === die) {
+    if (
+      die > requiredDie &&
+      state.bar[player] === 0 &&
+      closest !== null &&
+      closest === pointNumber
+    ) {
       legalMoves.push({
         kind: "bear",
         source: pointNumber,
@@ -294,6 +317,7 @@ const MinigamLogic = {
   computeTarget,
   computeOrigin,
   bearingDie,
+  closestToExitPoint,
   hasCheckersBehind,
   enterFromBar,
   moveChecker,

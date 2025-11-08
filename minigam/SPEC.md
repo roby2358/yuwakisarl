@@ -40,12 +40,19 @@ Checkers that have borne off are not displayed.
 
 ### Keyboard Input
 
+Character input during the AI turn are ignored.
 Space to roll on your turn
-1-6 to play your first move
-1-6 to play your second move
-b1-6 to bear a checker off from that point
+1-6 to enter a checker from the bar
+Consecutive key presses move or bear off. Any unrecognized characters are ignored.
+b + 1-6 to bear a checker off from that point
+m + 1-6 + 1-6 to move a checker from the first point to the second point
+Space again restores dice and board state for the current turn. Messages remain but an "reset" message appears.
+Invalid moves are reported in messages.
 
 A digit always means “move or enter to that exact destination point,” and b1-6 always means “bear off from point N.”
+
+Bear-off commands consume the exact die matching the distance when available. If no exact die is present, and the player has no checkers on the bar, a higher die may be used to bear off the checker farthest back (closest to bearing off: highest-numbered for the human, lowest-numbered for the AI).
+If an exact die exists it must be taken before using a higher die.
 
 In each case, the "first" checker moves. From the bar, it's the "first" checker on the
 bar (they are really more of a count). From a made point it's the "top" checker. When
