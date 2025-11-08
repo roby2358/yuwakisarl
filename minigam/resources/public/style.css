@@ -1,0 +1,200 @@
+:root {
+  --bg: #101923;
+  --board: #1e2f3f;
+  --point-top: #4c6f91;
+  --point-bottom: #2e4a64;
+  --checker-human: #f0c674;
+  --checker-ai: #7ab0d6;
+  --text: #e8f1f5;
+  --accent: #8dd0ff;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+h1 {
+  text-align: center;
+  color: var(--accent);
+  letter-spacing: 0.2rem;
+}
+
+#board-container {
+  display: flex;
+  justify-content: center;
+}
+
+#board {
+  background: var(--board);
+  border-radius: 12px;
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.point-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(60px, 1fr));
+  gap: 0.75rem;
+}
+
+.point {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  min-height: 160px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0.5rem;
+}
+
+.point.top {
+  flex-direction: column-reverse;
+}
+
+.point::after {
+  content: attr(data-point);
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.point-row.top .point {
+  background: var(--point-top);
+}
+
+.point-row.bottom .point {
+  background: var(--point-bottom);
+}
+
+.checker {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  margin: 4px auto;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.checker.human {
+  background: var(--checker-human);
+}
+
+.checker.ai {
+  background: var(--checker-ai);
+}
+
+#center-strip {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bar {
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  padding: 0.5rem;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.bar-label {
+  text-align: center;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.checker-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+#dice-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.die {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  margin: 0 4px;
+}
+
+#dice {
+  display: flex;
+}
+
+#messages {
+  margin-top: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+#log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.message {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+#controls ul {
+  list-style: none;
+  padding: 0;
+}
+
+#controls li {
+  margin-bottom: 0.25rem;
+}
+
+#turn-indicator {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+@media (max-width: 768px) {
+  main {
+    padding: 1rem;
+  }
+
+  .point-row {
+    grid-template-columns: repeat(6, minmax(40px, 1fr));
+  }
+
+  .point {
+    min-height: 120px;
+  }
+}
+
