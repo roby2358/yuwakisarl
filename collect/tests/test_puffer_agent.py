@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-pytest.importorskip("torch")
+torch = pytest.importorskip("torch")
 pytest.importorskip("pufferlib")
 
 from collect.puffer_agent import CollectPufferAgent
@@ -24,3 +24,11 @@ def test_collect_puffer_agent_validates_state_size() -> None:
     with pytest.raises(ValueError):
         agent.act(np.zeros((2, 7), dtype=np.float32))
 
+
+def test_collect_puffer_agent_uses_three_hidden_layers() -> None:
+    agent = CollectPufferAgent(state_size=14, action_size=9, hidden_size=64)
+    policy = agent._policy
+    linear_layers = [module for module in policy._encoder if isinstance(module, torch.nn.Linear)]
+    assert len(linear_layers) == 3
+    assert all(layer.out_features == 64 for layer in linear_layers)
+    assert all(layer.in_features == 64 for layer in linear_layers[1:])

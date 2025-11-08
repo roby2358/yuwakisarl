@@ -12,7 +12,7 @@ try:
     import torch
     from torch.distributions import Categorical
 
-    import pufferlib.models
+    import pufferlib.pytorch
 except Exception as exc:  # pragma: no cover - optional dependency bootstrap
     raise ImportError("CollectPufferAgent requires torch, gymnasium, and pufferlib") from exc
 
@@ -40,8 +40,56 @@ class _CollectEnvSpec:
         self.action_space = self.single_action_space
 
 
+class _DensePolicy(torch.nn.Module):
+    """Two-layer MLP policy for Collect."""
+
+    def __init__(self, spec: _CollectEnvSpec, hidden_size: int) -> None:
+        super().__init__()
+        observation_shape = spec.single_observation_space.shape
+        if len(observation_shape) != 1:
+            raise ValueError("Collect environment expects flat observations")
+        observation_dim = int(np.prod(observation_shape))
+        action_dim = int(spec.single_action_space.n)
+
+        self._encoder = torch.nn.Sequential(
+            pufferlib.pytorch.layer_init(torch.nn.Linear(observation_dim, hidden_size)),
+            torch.nn.GELU(),
+            pufferlib.pytorch.layer_init(torch.nn.Linear(hidden_size, hidden_size)),
+            torch.nn.GELU(),
+            pufferlib.pytorch.layer_init(torch.nn.Linear(hidden_size, hidden_size)),
+            torch.nn.GELU(),
+        )
+        self._policy_head = pufferlib.pytorch.layer_init(
+            torch.nn.Linear(hidden_size, action_dim),
+            std=0.01,
+        )
+        self._value_head = pufferlib.pytorch.layer_init(
+            torch.nn.Linear(hidden_size, 1),
+            std=1.0,
+        )
+
+    def forward_eval(self, observations: torch.Tensor, state: Dict[str, torch.Tensor] | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+        encoded = self.encode_observations(observations, state)
+        return self.decode_actions(encoded)
+
+    def forward(self, observations: torch.Tensor, state: Dict[str, torch.Tensor] | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.forward_eval(observations, state)
+
+    def encode_observations(self, observations: torch.Tensor, state: Dict[str, torch.Tensor] | None = None) -> torch.Tensor:
+        if observations.ndim == 1:
+            raise ValueError("Observations must include a batch dimension")
+        batch_size = observations.shape[0]
+        flattened = observations.view(batch_size, -1)
+        return self._encoder(flattened.float())
+
+    def decode_actions(self, hidden: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        logits = self._policy_head(hidden)
+        values = self._value_head(hidden)
+        return logits, values
+
+
 class CollectPufferAgent:
-    """Single-agent policy that leverages pufferlib's default model."""
+    """Single-agent policy powered by a widened two-layer MLP."""
 
     def __init__(
         self,
@@ -60,7 +108,7 @@ class CollectPufferAgent:
 
         self._device = torch.device("cpu")
         self._spec = _CollectEnvSpec(state_size, action_size)
-        self._policy = pufferlib.models.Default(self._spec, hidden_size=hidden_size).to(self._device)
+        self._policy = _DensePolicy(self._spec, hidden_size=hidden_size).to(self._device)
         self._policy.train()
         self._optimizer = torch.optim.Adam(self._policy.parameters(), lr=learning_rate)
         self._entropy_coef = float(entropy_coef)
