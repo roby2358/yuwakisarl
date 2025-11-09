@@ -6,13 +6,7 @@ import random
 from dataclasses import dataclass, replace
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .config import (
-    COLLISION_PENALTY,
-    FIELD_DIMENSIONS,
-    SHAPING_REWARD,
-    SHAPING_REWARD_CLOSE,
-    SHAPING_REWARD_CLOSE_DISTANCE,
-)
+from .config import COLLISION_PENALTY, FIELD_DIMENSIONS, SHAPING_REWARD_MAX, SHAPING_REWARD_MIN
 from .types import Action, ControllerType, GridPosition, Player
 
 
@@ -237,11 +231,19 @@ class GameState:
         after_distance = self._distance_to_goal(player, self._objects.resources, self._objects.target)
         if after_distance is None:
             return 0.0
-        reward_magnitude = SHAPING_REWARD
-        proximity_distance = min(before_distance, after_distance)
-        if proximity_distance <= SHAPING_REWARD_CLOSE_DISTANCE:
-            reward_magnitude = SHAPING_REWARD_CLOSE
+
+        max_distance = FIELD_DIMENSIONS.width + FIELD_DIMENSIONS.height - 2
+        if max_distance <= 0:
+            return 0.0
+
+        def scaled_magnitude(distance: int) -> float:
+            clamped_distance = max(0, min(distance, max_distance))
+            scale = clamped_distance / max_distance
+            delta = SHAPING_REWARD_MAX - SHAPING_REWARD_MIN
+            return SHAPING_REWARD_MIN + (delta * scale)
+
+        magnitude_distance = after_distance
         if after_distance < before_distance:
-            return reward_magnitude
-        return -reward_magnitude
+            return scaled_magnitude(magnitude_distance)
+        return -scaled_magnitude(magnitude_distance)
 

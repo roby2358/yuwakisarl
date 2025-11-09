@@ -6,7 +6,7 @@ from typing import Iterator, Tuple
 
 import pytest
 
-from collect.config import SHAPING_REWARD, SHAPING_REWARD_CLOSE
+from collect.config import FIELD_DIMENSIONS, SHAPING_REWARD_MAX, SHAPING_REWARD_MIN
 from collect.game_state import GameObjects, GameState
 from collect.types import Action, ControllerType, Player
 
@@ -260,37 +260,57 @@ def test_player_carrying_cannot_collect_second_resource(monkeypatch: pytest.Monk
     assert set(state.resources) == {(12, 10)}
 
 
-def test_shaping_reward_increases_when_close_positive() -> None:
+def _expected_magnitude(distance: int) -> float:
+    max_distance = FIELD_DIMENSIONS.width + FIELD_DIMENSIONS.height - 2
+    return SHAPING_REWARD_MIN + (SHAPING_REWARD_MAX - SHAPING_REWARD_MIN) * (distance / max_distance)
+
+
+def test_shaping_reward_scales_positive_with_distance() -> None:
+    player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI).with_resource(True)
+    state = GameState([player])
+    configured_player = player.with_position((10, 10))
+    state._objects = GameObjects(players=(configured_player,), resources=(), target=(13, 10))
+
+    before_distance = 4
+    reward = state._shaping_reward(player_index=0, before_distance=before_distance)
+
+    after_distance = state._distance_to_goal(configured_player, state.resources, state.target)
+    assert after_distance is not None
+
+    assert after_distance < before_distance
+    assert reward == pytest.approx(_expected_magnitude(after_distance))
+
+
+def test_shaping_reward_scales_negative_with_distance() -> None:
+    player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI).with_resource(True)
+    state = GameState([player])
+    configured_player = player.with_position((20, 20))
+    state._objects = GameObjects(players=(configured_player,), resources=(), target=(10, 20))
+
+    before_distance = 9
+    reward = state._shaping_reward(player_index=0, before_distance=before_distance)
+
+    after_distance = state._distance_to_goal(configured_player, state.resources, state.target)
+    assert after_distance is not None
+
+    assert reward == pytest.approx(-_expected_magnitude(after_distance))
+
+
+def test_shaping_reward_uses_minimum_when_distance_zero() -> None:
+    player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI).with_resource(True)
+    state = GameState([player])
+    configured_player = player.with_position((50, 50))
+    state._objects = GameObjects(players=(configured_player,), resources=(), target=(50, 50))
+
+    reward = state._shaping_reward(player_index=0, before_distance=1)
+
+    assert reward == pytest.approx(_expected_magnitude(0))
+
+
+def test_shaping_reward_returns_zero_when_before_distance_unknown() -> None:
     player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI)
     state = GameState([player])
-    close_player = player.with_position((0, 0))
-    close_resources = ((1, 2),)
-    state._objects = GameObjects(players=(close_player,), resources=close_resources, target=(10, 10))
 
-    reward = state._shaping_reward(player_index=0, before_distance=4)
+    reward = state._shaping_reward(player_index=0, before_distance=None)
 
-    assert reward == SHAPING_REWARD_CLOSE
-
-
-def test_shaping_reward_increases_when_close_negative() -> None:
-    player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI)
-    state = GameState([player])
-    far_player = player.with_position((0, 0))
-    far_resources = ((5, 0),)
-    state._objects = GameObjects(players=(far_player,), resources=far_resources, target=(10, 10))
-
-    reward = state._shaping_reward(player_index=0, before_distance=2)
-
-    assert reward == -SHAPING_REWARD_CLOSE
-
-
-def test_shaping_reward_uses_default_magnitude_when_far() -> None:
-    player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI)
-    state = GameState([player])
-    far_player = player.with_position((0, 0))
-    far_resources = ((20, 0),)
-    state._objects = GameObjects(players=(far_player,), resources=far_resources, target=(10, 10))
-
-    reward = state._shaping_reward(player_index=0, before_distance=12)
-
-    assert reward == -SHAPING_REWARD
+    assert reward == 0.0
