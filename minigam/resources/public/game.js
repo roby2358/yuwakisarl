@@ -5,6 +5,11 @@
   const HUMAN = Players.HUMAN;
   const AI = Players.AI;
 
+  const gameStateTools = window.MinigamGameState;
+  if (!gameStateTools) {
+    throw new Error("Game state helpers unavailable.");
+  }
+
   const DIGIT_KEYS = new Set(["1", "2", "3", "4", "5", "6"]);
 
   function isDigitKey(key) {
@@ -190,16 +195,7 @@
   let boardSerializer;
   const dice = new Dice(() => Math.floor(Math.random() * 6) + 1);
 
-  const state = {
-    board: logic.createInitialState(),
-    currentPlayer: HUMAN,
-    pendingDice: dice.pending,
-    diceRolled: dice.rolled,
-    turnCompletedDice: dice.completed,
-    awaitingRoll: dice.awaitingRoll,
-    gameOver: false,
-    turnSnapshot: null,
-  };
+  const state = gameStateTools.createGameState(logic, dice, HUMAN);
 
   function rollDice() {
     const rolledValues = dice.roll();
@@ -267,10 +263,6 @@
       const $point = $(this);
       $point.empty();
 
-      const aiLabel = $point.data("ai");
-      if (aiLabel) {
-        $("<div>", { class: "point-label top", text: aiLabel }).appendTo($point);
-      }
       $("<div>", { class: "point-label bottom", text: pointNumber }).appendTo($point);
 
       const stack = $("<div>", { class: "checker-stack" }).appendTo($point);
@@ -333,7 +325,7 @@
   function renderTurnIndicator() {
     const $indicator = $("#turn-indicator");
     if (state.gameOver) {
-      $indicator.text("Game Over");
+      $indicator.text("Game Over - Press space to restart");
       return;
     }
 
@@ -409,6 +401,7 @@
     if (state.board.borneOff[player] >= logic.CHECKERS_PER_PLAYER) {
       state.gameOver = true;
       addMessage(`${player} wins!`);
+      addMessage("Press space to restart the game.");
       renderDice();
       return true;
     }
@@ -639,9 +632,34 @@
     endTurn();
   }
 
+  function isRestartKeyEvent(event) {
+    if (!event) {
+      return false;
+    }
+    if (gameStateTools.isRestartKey(event.key)) {
+      return true;
+    }
+    return event.code === "Space";
+  }
+
+  function restartGame() {
+    gameStateTools.resetGameState(state, logic, dice, HUMAN);
+    if (inputMachine) {
+      inputMachine.transitionToAwaitRoll();
+    }
+    renderBoard();
+    addMessage("Game restarted. Press space to roll.");
+  }
+
   function processKey(event) {
     if (state.gameOver) {
-      addMessage("Game over. Refresh to restart.");
+      if (isRestartKeyEvent(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        restartGame();
+        return;
+      }
+      addMessage("Game over. Press space to restart.");
       return;
     }
 

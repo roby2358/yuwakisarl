@@ -11,6 +11,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="/static/game_logic.js"></script>
     <script src="/static/dice.js"></script>
+    <script src="/static/game_state.js"></script>
     <script src="/static/board_serializer.js"></script>
     <script src="/static/move_formatter.js"></script>
     <script src="/static/game.js" defer></script>
@@ -21,13 +22,9 @@
       <section id="board-wrapper">
         <div id="board-frame">
           <div class="frame-row frame-top">
-            <div class="frame-corner"></div>
             <div id="dice-tray" aria-live="polite">
-              <span class="brace left">[</span>
               <div id="dice"></div>
-              <span class="brace right">]</span>
             </div>
-            <div class="frame-corner"></div>
           </div>
           <div class="frame-row frame-turn">
             <div class="frame-spacer"></div>
@@ -48,24 +45,11 @@
                 <div class="point" data-point="2" data-ai="5"></div>
                 <div class="point" data-point="1" data-ai="6"></div>
               </div>
-              <div id="mid-divider"></div>
             </div>
             <div id="right-rail" class="rail">
               <div class="rail-label">Human Bar</div>
               <div id="human-bar" class="checker-stack"></div>
             </div>
-          </div>
-          <div class="frame-row frame-bottom">
-            <div class="frame-corner"></div>
-            <div class="frame-spacer indices">
-              <span class="index">1</span>
-              <span class="index">2</span>
-              <span class="index">3</span>
-              <span class="index">4</span>
-              <span class="index">5</span>
-              <span class="index">6</span>
-            </div>
-            <div class="frame-corner"></div>
           </div>
         </div>
         <div id="message-rail" aria-live="polite">
