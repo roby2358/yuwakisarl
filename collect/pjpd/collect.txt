@@ -1,0 +1,24 @@
+Priority:   60
+Status: ToDo
+ID: rltrace-vu5h
+Extend `NeuralPolicyAgent` to support discounted or n-step returns by retaining short trajectories (not just the last action) so rewards propagate across sequences, and add unit tests that fail under the current single-step trace.
+---
+Priority:   45
+Status: ToDo
+ID: rlshare-z7q4
+Introduce an agent-sharing mechanism in `AIController` (or update documentation/tests) so AI-controlled players can optionally share a single learner instance when desired, preventing divergence from the RL guide.
+---
+Priority:    0
+Status: Done
+ID: rldoc-fq5b
+Audit `RL.md` against the current `Observation` encoding and update the documentation (or the encoder) so that the described features match the nine-value vector that agents actually receive.
+---
+Priority:    0
+Status: Done
+ID: rlboot-3wka
+Update `CollectPufferAgent.learn` to bootstrap value targets with the next state (or a configurable discount), instead of ignoring `next_state`, and cover the change with unit tests.
+---
+Priority:    0
+Status: Done
+ID: rlfix-aia8
+Fix `NeuralPolicyAgent.learn` so backprop uses the pre-update weight matrices when computing hidden-layer deltas, and add a regression unit test that fails with the current in-place update order.
