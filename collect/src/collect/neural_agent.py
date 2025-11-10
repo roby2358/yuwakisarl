@@ -18,37 +18,61 @@ def _softmax(logits: np.ndarray) -> np.ndarray:
 
 @dataclass
 class NeuralPolicyAgent:
-    """Simple policy-gradient agent with a single hidden layer."""
+    """Simple policy-gradient agent with multiple hidden layers."""
 
     state_size: int
     action_size: int
-    hidden_size: int = 64
+    hidden_size: int = 128
+    hidden_layers: int = 3
     learning_rate: float = 0.01
     epsilon: float = 0.8
     epsilon_decay: float = 0.99995
     epsilon_min: float = 0.05
     baseline_momentum: float = 0.99
 
-    _w1: np.ndarray = field(init=False)
-    _b1: np.ndarray = field(init=False)
-    _w2: np.ndarray = field(init=False)
-    _b2: np.ndarray = field(init=False)
+    _weights: Tuple[np.ndarray, ...] = field(init=False)
+    _biases: Tuple[np.ndarray, ...] = field(init=False)
     _baseline: float = field(default=0.0, init=False)
-    _traces: Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray, int]] = field(default_factory=dict, init=False)
+    _traces: Dict[int, Tuple[Tuple[np.ndarray, ...], np.ndarray, int]] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
+        if self.hidden_layers < 1:
+            msg = f"hidden_layers must be >= 1 (got {self.hidden_layers})"
+            raise ValueError(msg)
+
         rng = np.random.default_rng()
-        scale1 = math.sqrt(2.0 / max(1, self.state_size))
-        scale2 = math.sqrt(2.0 / max(1, self.hidden_size))
-        self._w1 = rng.normal(0.0, scale1, size=(self.state_size, self.hidden_size)).astype(np.float32)
-        self._b1 = np.zeros(self.hidden_size, dtype=np.float32)
-        self._w2 = rng.normal(0.0, scale2, size=(self.hidden_size, self.action_size)).astype(np.float32)
-        self._b2 = np.zeros(self.action_size, dtype=np.float32)
+        weights = []
+        biases = []
+
+        fan_in = self.state_size
+        for _ in range(self.hidden_layers):
+            layer_scale = math.sqrt(2.0 / max(1, fan_in))
+            weight = rng.normal(0.0, layer_scale, size=(fan_in, self.hidden_size)).astype(np.float32)
+            bias = np.zeros(self.hidden_size, dtype=np.float32)
+            weights.append(weight)
+            biases.append(bias)
+            fan_in = self.hidden_size
+
+        output_scale = math.sqrt(2.0 / max(1, fan_in))
+        output_weight = rng.normal(0.0, output_scale, size=(fan_in, self.action_size)).astype(np.float32)
+        output_bias = np.zeros(self.action_size, dtype=np.float32)
+
+        weights.append(output_weight)
+        biases.append(output_bias)
+
+        self._weights = tuple(weights)
+        self._biases = tuple(biases)
 
     def act(self, state: Sequence[float], actor_id: int = 0) -> int:
         state_vector = np.asarray(state, dtype=np.float32)
-        hidden = np.tanh(state_vector @ self._w1 + self._b1)
-        logits = hidden @ self._w2 + self._b2
+
+        activations = [state_vector]
+        current = state_vector
+        for layer_index in range(self.hidden_layers):
+            current = np.tanh(current @ self._weights[layer_index] + self._biases[layer_index])
+            activations.append(current)
+
+        logits = activations[-1] @ self._weights[-1] + self._biases[-1]
         probs = _softmax(logits)
 
         if random.random() < self.epsilon:
@@ -56,7 +80,7 @@ class NeuralPolicyAgent:
         else:
             action = int(np.random.choice(self.action_size, p=probs))
 
-        self._traces[actor_id] = (state_vector, hidden, probs, action)
+        self._traces[actor_id] = (tuple(activations), probs, action)
 
         self._decay_epsilon()
         return action
@@ -66,7 +90,7 @@ class NeuralPolicyAgent:
         if trace is None:
             return
 
-        state, hidden, probs, action = trace
+        activations, probs, action = trace
 
         advantage = reward - self._baseline
         self._baseline = self.baseline_momentum * self._baseline + (1 - self.baseline_momentum) * reward
@@ -75,12 +99,16 @@ class NeuralPolicyAgent:
         one_hot[action] = 1.0
 
         delta2 = (one_hot - probs) * advantage
-        self._w2 += self.learning_rate * np.outer(hidden, delta2)
-        self._b2 += self.learning_rate * delta2
+        self._weights[-1] += self.learning_rate * np.outer(activations[-1], delta2)
+        self._biases[-1] += self.learning_rate * delta2
 
-        grad_hidden = (delta2 @ self._w2.T) * (1.0 - hidden ** 2)
-        self._w1 += self.learning_rate * np.outer(state, grad_hidden)
-        self._b1 += self.learning_rate * grad_hidden
+        delta = delta2
+        for layer_index in range(self.hidden_layers - 1, -1, -1):
+            hidden_output = activations[layer_index + 1]
+            derivative = 1.0 - hidden_output**2
+            delta = (delta @ self._weights[layer_index + 1].T) * derivative
+            self._weights[layer_index] += self.learning_rate * np.outer(activations[layer_index], delta)
+            self._biases[layer_index] += self.learning_rate * delta
 
     def _decay_epsilon(self) -> None:
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)

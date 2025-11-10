@@ -2,19 +2,32 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Dict, Sequence
 
 import numpy as np
 
-try:
-    import gymnasium as gym
-    import torch
-    from torch.distributions import Categorical
+import gymnasium as gym
+import torch
+from torch.distributions import Categorical
 
-    import pufferlib.pytorch
+try:
+    import pufferlib.pytorch as _puffer_torch
 except Exception as exc:  # pragma: no cover - optional dependency bootstrap
-    raise ImportError("CollectPufferAgent requires torch, gymnasium, and pufferlib") from exc
+    _puffer_torch = None
+    warnings.warn(
+        "pufferlib not available; CollectPufferAgent is using an internal initialization shim.",
+        ImportWarning,
+    )
+    def _layer_init(layer: torch.nn.Linear, std: float = float(np.sqrt(2.0)), bias_const: float = 0.0) -> torch.nn.Linear:
+        """Fallback CleanRL-style layer initialization."""
+        torch.nn.init.orthogonal_(layer.weight, std)
+        torch.nn.init.constant_(layer.bias, bias_const)
+        return layer
+else:  # pragma: no cover - smoke tests rely on shim path
+    def _layer_init(layer: torch.nn.Linear, std: float = float(np.sqrt(2.0)), bias_const: float = 0.0) -> torch.nn.Linear:
+        return _puffer_torch.layer_init(layer, std=std, bias_const=bias_const)
 
 
 _FLOAT_DTYPE = np.float32
@@ -52,18 +65,18 @@ class _DensePolicy(torch.nn.Module):
         action_dim = int(spec.single_action_space.n)
 
         self._encoder = torch.nn.Sequential(
-            pufferlib.pytorch.layer_init(torch.nn.Linear(observation_dim, hidden_size)),
+            _layer_init(torch.nn.Linear(observation_dim, hidden_size)),
             torch.nn.GELU(),
-            pufferlib.pytorch.layer_init(torch.nn.Linear(hidden_size, hidden_size)),
+            _layer_init(torch.nn.Linear(hidden_size, hidden_size)),
             torch.nn.GELU(),
-            pufferlib.pytorch.layer_init(torch.nn.Linear(hidden_size, hidden_size)),
+            _layer_init(torch.nn.Linear(hidden_size, hidden_size)),
             torch.nn.GELU(),
         )
-        self._policy_head = pufferlib.pytorch.layer_init(
+        self._policy_head = _layer_init(
             torch.nn.Linear(hidden_size, action_dim),
             std=0.01,
         )
-        self._value_head = pufferlib.pytorch.layer_init(
+        self._value_head = _layer_init(
             torch.nn.Linear(hidden_size, 1),
             std=1.0,
         )

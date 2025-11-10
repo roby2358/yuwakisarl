@@ -9,6 +9,7 @@ from .config import (
     CELL_SIZE_PX,
     FIELD_DIMENSIONS,
     GRID_COLOR,
+    MONSTER_COLOR,
     PLAYER_COLOR,
     RESOURCE_COLOR,
     TARGET_COLOR,
@@ -29,6 +30,7 @@ class Renderer:
         self,
         players: tuple[Player, ...],
         resources: tuple[tuple[int, int], ...],
+        monster: tuple[int, int],
         target: tuple[int, int],
         round_seconds_remaining: float,
         paused: bool,
@@ -38,6 +40,7 @@ class Renderer:
             self._draw_player(player)
         self._draw_resources(resources)
         self._draw_target(target)
+        self._draw_monster(monster)
         self._draw_hud(players, round_seconds_remaining, paused)
         pygame.display.flip()
 
@@ -69,6 +72,11 @@ class Renderer:
         tx, ty = self._cell_to_pixels(target)
         radius = CELL_SIZE_PX // 2
         pygame.draw.circle(self._surface, TARGET_COLOR, (tx, ty), radius, width=1)
+
+    def _draw_monster(self, monster: tuple[int, int]) -> None:
+        mx, my = self._cell_to_pixels(monster)
+        radius = max(1, CELL_SIZE_PX // 2)
+        pygame.draw.circle(self._surface, MONSTER_COLOR, (mx, my), radius, width=0)
 
     def _draw_hud(
         self,

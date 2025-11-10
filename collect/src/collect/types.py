@@ -96,4 +96,5 @@ class Observation:
     players: Tuple[Player, ...]
     resources: Tuple[GridPosition, ...]
     target: GridPosition
+    monster: GridPosition
 

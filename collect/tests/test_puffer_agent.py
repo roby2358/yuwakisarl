@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
-pytest.importorskip("pufferlib")
 
 from collect.puffer_agent import CollectPufferAgent
 

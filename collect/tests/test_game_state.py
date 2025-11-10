@@ -18,10 +18,16 @@ def deterministic_cells(*cells: Tuple[int, int]) -> Iterator[Tuple[int, int]]:
         yield cells[-1]
 
 
+@pytest.fixture(autouse=True)
+def disable_monster_movement(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("collect.game_state.random.random", lambda: 1.0)
+
+
 def test_player_collects_resource(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("collect.config.RESOURCE_COUNT", 1, raising=False)
     cells = deterministic_cells(
         (40, 40),  # player start
+        (60, 60),  # monster position
         (41, 40),  # resource position
     )
 
@@ -47,6 +53,7 @@ def test_player_delivers_resource(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("collect.config.RESOURCE_COUNT", 1, raising=False)
     cells = deterministic_cells(
         (101, 100),  # player start near target
+        (150, 150),  # monster position
         (100, 100),  # blocked target position (should be skipped)
         (100, 99),  # blocked adjacent position (should be skipped)
         (101, 99),  # blocked adjacent position (should be skipped)
@@ -82,6 +89,7 @@ def test_collision_drops_resource(monkeypatch: pytest.MonkeyPatch) -> None:
     cells = deterministic_cells(
         (1, 1),  # player 0 start
         (1, 2),  # player 1 start
+        (5, 5),  # monster position
         (2, 1),  # resource initial
         (10, 10),  # resource after pickup
         (7, 7),  # resource after collision drop
@@ -116,6 +124,7 @@ def test_collision_penalty_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     cells = deterministic_cells(
         (5, 5),  # player 0 start
         (5, 6),  # player 1 start
+        (8, 8),  # monster position
     )
 
     def next_cell(exclusions: tuple[Tuple[int, int], ...]) -> Tuple[int, int]:
@@ -194,6 +203,7 @@ def test_resources_do_not_overlap(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("collect.config.RESOURCE_COUNT", 2, raising=False)
     placement_sequence = [
         (30, 30),  # player position
+        (40, 40),  # monster position
         (60, 60),  # first resource
         (60, 60),  # duplicate attempt that should be excluded
         (70, 70),  # second resource
@@ -222,7 +232,7 @@ def test_resources_do_not_overlap(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(state.resources) == 2
     assert len(set(state.resources)) == len(state.resources)
 
-    new_resource = state._random_resource_position(state.players, state.target, state.resources)
+    new_resource = state._random_resource_position(state.players, state.target, state.resources, state.monster)
     assert new_resource not in state.resources
     assert any(state.resources[0] in exclusions for exclusions in observed_exclusions)
 
@@ -231,6 +241,7 @@ def test_player_carrying_cannot_collect_second_resource(monkeypatch: pytest.Monk
     monkeypatch.setattr("collect.config.RESOURCE_COUNT", 2, raising=False)
     cells = deterministic_cells(
         (10, 10),  # player position
+        (20, 20),  # monster position
         (11, 10),  # first resource
         (12, 10),  # second resource
     )
@@ -260,6 +271,107 @@ def test_player_carrying_cannot_collect_second_resource(monkeypatch: pytest.Monk
     assert set(state.resources) == {(12, 10)}
 
 
+def test_monster_moves_toward_nearest_carrier(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("collect.game_state.random.random", lambda: 0.0)
+    carrier = Player(identifier=0, position=(5, 5), controller=ControllerType.AI).with_resource(True)
+    other = Player(identifier=1, position=(10, 10), controller=ControllerType.AI)
+    state = GameState([carrier, other])
+    state._objects = GameObjects(
+        players=(carrier, other),
+        resources=(),
+        target=(20, 20),
+        monster=(0, 0),
+    )
+
+    state.update_player(0, Action.STAY)
+
+    assert state.monster == (1, 1)
+
+
+def test_monster_steals_resource_when_colliding(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("collect.game_state.random.random", lambda: 0.0)
+    new_resource_cells = deterministic_cells((6, 6))
+
+    def next_cell(exclusions: tuple[Tuple[int, int], ...]) -> Tuple[int, int]:
+        while True:
+            candidate = next(new_resource_cells)
+            if candidate in exclusions:
+                continue
+            return candidate
+
+    monkeypatch.setattr("collect.game_state._random_cell", next_cell)
+    carrier = Player(identifier=0, position=(4, 4), controller=ControllerType.AI).with_resource(True)
+    state = GameState([carrier])
+    state._objects = GameObjects(
+        players=(carrier,),
+        resources=(),
+        target=(20, 20),
+        monster=(3, 3),
+    )
+
+    state.update_player(0, Action.STAY)
+
+    assert state.players[0].has_resource is False
+    assert state.monster == (4, 4)
+    assert len(state.resources) == 1
+    assert state.resources[0] == (6, 6)
+
+
+def test_monster_moves_only_when_random_below_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
+    def build_state() -> GameState:
+        carrier = Player(identifier=0, position=(4, 4), controller=ControllerType.AI).with_resource(True)
+        state = GameState([carrier])
+        state._objects = GameObjects(
+            players=(carrier,),
+            resources=(),
+            target=(10, 10),
+            monster=(0, 0),
+        )
+        return state
+
+    monkeypatch.setattr("collect.game_state.random.random", lambda: 0.29)
+    moving_state = build_state()
+    moving_state.update_player(0, Action.STAY)
+    assert moving_state.monster == (1, 1)
+
+    monkeypatch.setattr("collect.game_state.random.random", lambda: 0.3)
+    stationary_state = build_state()
+    stationary_state.update_player(0, Action.STAY)
+    assert stationary_state.monster == (0, 0)
+
+
+def test_monster_reward_positive_when_distance_increases() -> None:
+    player = Player(identifier=0, position=(5, 5), controller=ControllerType.AI)
+    state = GameState([player])
+    configured_player = player.with_position((5, 5))
+    state._objects = GameObjects(
+        players=(configured_player,),
+        resources=(),
+        target=(10, 10),
+        monster=(5, 5),
+    )
+
+    reward = state.update_player(0, Action.MOVE_RIGHT)
+
+    assert reward == pytest.approx(0.05)
+
+
+def test_monster_reward_negative_when_distance_decreases() -> None:
+    player = Player(identifier=0, position=(5, 5), controller=ControllerType.AI)
+    state = GameState([player])
+    configured_player = player.with_position((5, 5))
+    state._objects = GameObjects(
+        players=(configured_player,),
+        resources=(),
+        target=(10, 10),
+        monster=(7, 5),
+    )
+
+    reward = state.update_player(0, Action.MOVE_RIGHT)
+
+    assert reward == pytest.approx(-0.05)
+
+
 def _expected_magnitude(distance: int) -> float:
     max_distance = FIELD_DIMENSIONS.width + FIELD_DIMENSIONS.height - 2
     return SHAPING_REWARD_MIN + (SHAPING_REWARD_MAX - SHAPING_REWARD_MIN) * (distance / max_distance)
@@ -269,7 +381,12 @@ def test_shaping_reward_scales_positive_with_distance() -> None:
     player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI).with_resource(True)
     state = GameState([player])
     configured_player = player.with_position((10, 10))
-    state._objects = GameObjects(players=(configured_player,), resources=(), target=(13, 10))
+    state._objects = GameObjects(
+        players=(configured_player,),
+        resources=(),
+        target=(13, 10),
+        monster=(0, 0),
+    )
 
     before_distance = 4
     reward = state._shaping_reward(player_index=0, before_distance=before_distance)
@@ -285,7 +402,12 @@ def test_shaping_reward_scales_negative_with_distance() -> None:
     player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI).with_resource(True)
     state = GameState([player])
     configured_player = player.with_position((20, 20))
-    state._objects = GameObjects(players=(configured_player,), resources=(), target=(10, 20))
+    state._objects = GameObjects(
+        players=(configured_player,),
+        resources=(),
+        target=(10, 20),
+        monster=(0, 0),
+    )
 
     before_distance = 9
     reward = state._shaping_reward(player_index=0, before_distance=before_distance)
@@ -300,7 +422,12 @@ def test_shaping_reward_uses_minimum_when_distance_zero() -> None:
     player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI).with_resource(True)
     state = GameState([player])
     configured_player = player.with_position((50, 50))
-    state._objects = GameObjects(players=(configured_player,), resources=(), target=(50, 50))
+    state._objects = GameObjects(
+        players=(configured_player,),
+        resources=(),
+        target=(50, 50),
+        monster=(0, 0),
+    )
 
     reward = state._shaping_reward(player_index=0, before_distance=1)
 

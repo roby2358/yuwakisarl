@@ -73,6 +73,7 @@ class GameObjects:
     players: Tuple[Player, ...]
     resources: Tuple[GridPosition, ...]
     target: GridPosition
+    monster: GridPosition
 
     def to_position_map(self) -> PositionOccupancy:
         occupancy: PositionOccupancy = {}
@@ -102,6 +103,10 @@ class GameState:
     def target(self) -> GridPosition:
         return self._objects.target
 
+    @property
+    def monster(self) -> GridPosition:
+        return self._objects.monster
+
     def reset_round(self) -> None:
         self._objects = self._initialise_objects(self._objects.players)
 
@@ -114,6 +119,7 @@ class GameState:
             players=tuple(players),
             resources=self._objects.resources,
             target=self._objects.target,
+            monster=self._objects.monster,
         )
 
     def update_player(self, player_index: int, action: Action) -> float:
@@ -126,6 +132,8 @@ class GameState:
         player = current_objects.players[player_index]
         before_score = player.score
         before_distance = self._distance_to_goal(player, current_objects.resources, current_objects.target)
+        monster_position_before = current_objects.monster
+        before_monster_distance = self._distance_to_monster(player, monster_position_before)
         desired_position = _move(player.position, action)
         penalty = 0.0
         if desired_position != player.position:
@@ -144,7 +152,11 @@ class GameState:
         self._deliver_if_ready(player_index)
         shaping = self._shaping_reward(player_index, before_distance)
         after_score = self._objects.players[player_index].score
-        return shaping + penalty + float(after_score - before_score)
+        player_after_move = self._objects.players[player_index]
+        after_monster_distance = self._distance_to_monster(player_after_move, monster_position_before)
+        monster_reward = self._monster_distance_reward(before_monster_distance, after_monster_distance)
+        self._maybe_move_monster()
+        return shaping + penalty + float(after_score - before_score) + monster_reward
 
     def _apply_move(self, player_index: int, position: GridPosition) -> GameObjects:
         players = list(self._objects.players)
@@ -154,7 +166,12 @@ class GameState:
         if position in resources:
             players[player_index] = players[player_index].with_resource(True)
             resources.remove(position)
-        return GameObjects(players=tuple(players), resources=tuple(resources), target=self._objects.target)
+        return GameObjects(
+            players=tuple(players),
+            resources=tuple(resources),
+            target=self._objects.target,
+            monster=self._objects.monster,
+        )
 
     def _handle_collision(self, player_index: int) -> None:
         player = self._objects.players[player_index]
@@ -163,8 +180,20 @@ class GameState:
         players = list(self._objects.players)
         players[player_index] = player.with_resource(False)
         resources = list(self._objects.resources)
-        resources.append(self._random_resource_position(tuple(players), self._objects.target, tuple(resources)))
-        self._objects = GameObjects(players=tuple(players), resources=tuple(resources), target=self._objects.target)
+        resources.append(
+            self._random_resource_position(
+                tuple(players),
+                self._objects.target,
+                tuple(resources),
+                self._objects.monster,
+            )
+        )
+        self._objects = GameObjects(
+            players=tuple(players),
+            resources=tuple(resources),
+            target=self._objects.target,
+            monster=self._objects.monster,
+        )
 
     def _deliver_if_ready(self, player_index: int) -> None:
         player = self._objects.players[player_index]
@@ -175,8 +204,20 @@ class GameState:
         players = list(self._objects.players)
         players[player_index] = player.with_resource(False).with_score(player.score + 1)
         resources = list(self._objects.resources)
-        resources.append(self._random_resource_position(tuple(players), self._objects.target, tuple(resources)))
-        self._objects = GameObjects(players=tuple(players), resources=tuple(resources), target=self._objects.target)
+        resources.append(
+            self._random_resource_position(
+                tuple(players),
+                self._objects.target,
+                tuple(resources),
+                self._objects.monster,
+            )
+        )
+        self._objects = GameObjects(
+            players=tuple(players),
+            resources=tuple(resources),
+            target=self._objects.target,
+            monster=self._objects.monster,
+        )
 
     def _initialise_objects(self, players: Iterable[Player]) -> GameObjects:
         placements: List[Player] = []
@@ -189,18 +230,37 @@ class GameState:
         target_x = FIELD_DIMENSIONS.width // 2
         target_y = FIELD_DIMENSIONS.height // 2
         target_position = (target_x, target_y)
-        resources = self._initialise_resources(base_players, target_position)
-        return GameObjects(players=base_players, resources=resources, target=target_position)
+        monster_position = self._initialise_monster(base_players, target_position)
+        resources = self._initialise_resources(base_players, target_position, monster_position)
+        return GameObjects(
+            players=base_players,
+            resources=resources,
+            target=target_position,
+            monster=monster_position,
+        )
 
     def _random_cell(self, exclusions: Iterable[GridPosition]) -> GridPosition:
         return _random_cell(exclusions)
 
-    def _initialise_resources(self, players: Tuple[Player, ...], target: GridPosition) -> Tuple[GridPosition, ...]:
+    def _initialise_monster(self, players: Tuple[Player, ...], target: GridPosition) -> GridPosition:
+        return self._random_monster_position(players, target)
+
+    def _random_monster_position(self, players: Tuple[Player, ...], target: GridPosition) -> GridPosition:
+        blocked: set[GridPosition] = {player.position for player in players}
+        blocked.update(_target_exclusion_zone(target))
+        return _random_cell(tuple(blocked))
+
+    def _initialise_resources(
+        self,
+        players: Tuple[Player, ...],
+        target: GridPosition,
+        monster_position: GridPosition,
+    ) -> Tuple[GridPosition, ...]:
         from .config import RESOURCE_COUNT
 
         resources: List[GridPosition] = []
         for _ in range(RESOURCE_COUNT):
-            resources.append(self._random_resource_position(players, target, tuple(resources)))
+            resources.append(self._random_resource_position(players, target, tuple(resources), monster_position))
         return tuple(resources)
 
     def _random_resource_position(
@@ -208,10 +268,12 @@ class GameState:
         players: Tuple[Player, ...],
         target: GridPosition,
         existing_resources: Tuple[GridPosition, ...],
+        monster_position: GridPosition,
     ) -> GridPosition:
         occupied: set[GridPosition] = {player.position for player in players}
         occupied.update(_target_exclusion_zone(target))
         occupied.update(existing_resources)
+        occupied.add(monster_position)
         resource_position = _random_cell(tuple(occupied))
         return resource_position
 
@@ -223,6 +285,9 @@ class GameState:
         if not resources:
             return None
         return min(_manhattan_distance(player.position, resource) for resource in resources)
+
+    def _distance_to_monster(self, player: Player, monster_position: GridPosition) -> int:
+        return _manhattan_distance(player.position, monster_position)
 
     def _shaping_reward(self, player_index: int, before_distance: Optional[int]) -> float:
         if before_distance is None:
@@ -246,4 +311,66 @@ class GameState:
         if after_distance < before_distance:
             return scaled_magnitude(magnitude_distance)
         return -scaled_magnitude(magnitude_distance)
+
+    def _monster_distance_reward(
+        self, before_distance: Optional[int], after_distance: Optional[int]
+    ) -> float:
+        if before_distance is None or after_distance is None:
+            return 0.0
+        if before_distance == after_distance:
+            return 0.0
+        delta = after_distance - before_distance
+        magnitude = min(0.5, abs(delta) * 0.05)
+        if delta > 0:
+            return magnitude
+        return -magnitude
+
+    def _maybe_move_monster(self) -> None:
+        carriers = [player for player in self._objects.players if player.has_resource]
+        if not carriers:
+            return
+        if random.random() >= 0.3:
+            return
+        monster_position = self._objects.monster
+        target_player = min(carriers, key=lambda candidate: _manhattan_distance(candidate.position, monster_position))
+        step_x = self._step_towards(monster_position[0], target_player.position[0])
+        step_y = self._step_towards(monster_position[1], target_player.position[1])
+        next_position = (monster_position[0] + step_x, monster_position[1] + step_y)
+        if not _is_within_bounds(next_position):
+            next_position = monster_position
+        players = list(self._objects.players)
+        resources = list(self._objects.resources)
+        self._steal_resource_if_present(next_position, players, resources)
+        self._objects = GameObjects(
+            players=tuple(players),
+            resources=tuple(resources),
+            target=self._objects.target,
+            monster=next_position,
+        )
+
+    def _steal_resource_if_present(
+        self,
+        position: GridPosition,
+        players: List[Player],
+        resources: List[GridPosition],
+    ) -> None:
+        for index, candidate in enumerate(players):
+            if candidate.position != position or not candidate.has_resource:
+                continue
+            players[index] = candidate.with_resource(False)
+            new_resource = self._random_resource_position(
+                tuple(players),
+                self._objects.target,
+                tuple(resources),
+                position,
+            )
+            resources.append(new_resource)
+            return
+
+    def _step_towards(self, start: int, end: int) -> int:
+        if end > start:
+            return 1
+        if end < start:
+            return -1
+        return 0
 

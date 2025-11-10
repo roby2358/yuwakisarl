@@ -21,12 +21,16 @@ Game runtime dependencies:
 Development dependencies:  
 `pytest`
 
+Note: Pufferlib requires linux or WSL2
+
 ## Setup
 ```bash
 uv sync
 ```
 
 This creates a `.venv` and installs the project plus dev dependencies.
+
+Note: You must run Pufferlib in Linux or WSL2
 
 ## Running the Game
 ```bash

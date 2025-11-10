@@ -71,6 +71,7 @@ class Game:
                     self._renderer.draw(
                         self._state.players,
                         self._state.resources,
+                        self._state.monster,
                         self._state.target,
                         elapsed,
                         paused,
@@ -81,6 +82,7 @@ class Game:
                 self._renderer.draw(
                     self._state.players,
                     self._state.resources,
+                    self._state.monster,
                     self._state.target,
                     elapsed,
                     paused,
@@ -128,6 +130,7 @@ class Game:
                 player=player,
                 players=self._state.players,
                 resources=self._state.resources,
+                monster=self._state.monster,
                 target=self._state.target,
             )
             action = self._select_action(player, pressed, controller, observation)
@@ -138,6 +141,7 @@ class Game:
                     player=self._state.players[index],
                     players=self._state.players,
                     resources=self._state.resources,
+                    monster=self._state.monster,
                     target=self._state.target,
                 )
                 controller.observe(reward, next_observation)
@@ -173,6 +177,7 @@ class Game:
             self._renderer.draw(
                 self._state.players,
                 self._state.resources,
+                self._state.monster,
                 self._state.target,
                 remaining,
                 paused=True,
