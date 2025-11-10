@@ -93,6 +93,7 @@ class GameState:
         if not players_list:
             raise ValueError("GameState requires at least one player")
         self._objects = self._initialise_objects(players_list)
+        self._target_adjacent_positions = frozenset(_adjacent_positions(self._objects.target))
 
     @property
     def players(self) -> Tuple[Player, ...]:
@@ -112,6 +113,7 @@ class GameState:
 
     def reset_round(self) -> None:
         self._objects = self._initialise_objects(self._objects.players)
+        self._target_adjacent_positions = frozenset(_adjacent_positions(self._objects.target))
 
     def set_player_controller(self, player_index: int, controller: ControllerType) -> None:
         if player_index < 0 or player_index >= len(self._objects.players):
@@ -201,7 +203,7 @@ class GameState:
         player = self._objects.players[player_index]
         if not player.has_resource:
             return
-        if self._objects.target not in _adjacent_positions(player.position):
+        if player.position not in self._target_adjacent_positions:
             return
         players = list(self._objects.players)
         players[player_index] = player.with_resource(False).with_score(player.score + 1)
