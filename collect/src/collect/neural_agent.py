@@ -26,7 +26,7 @@ class NeuralPolicyAgent:
     hidden_layers: int = 3
     learning_rate: float = 0.01
     epsilon: float = 0.6
-    epsilon_decay: float = 0.9995
+    epsilon_decay: float = 0.99995
     epsilon_min: float = 0.05
     baseline_momentum: float = 0.99
 

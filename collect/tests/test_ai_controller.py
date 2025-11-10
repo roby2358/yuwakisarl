@@ -13,35 +13,52 @@ from collect.neural_agent import NeuralPolicyAgent
 from collect.types import ControllerType, Observation, Player
 
 
-def test_default_agent_prints_neural_when_puffer_missing(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr("collect.ai_controller.CollectPufferAgent", None, raising=False)
+def test_default_agent_uses_neural_when_flag_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyAgent:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+    monkeypatch.setattr("collect.ai_controller.CollectPufferAgent", DummyAgent, raising=False)
+    monkeypatch.delenv("COLLECT_USE_PUFFER", raising=False)
 
     agent = AIController.default_agent()
-    captured = capsys.readouterr()
 
     assert isinstance(agent, NeuralPolicyAgent)
-    assert "using built-in neural agent" in captured.out
 
 
-def test_default_agent_prints_pufferlib_when_available(
+def test_default_agent_uses_puffer_when_enabled(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     class DummyAgent:
-        def __init__(self) -> None:
-            self.initialised = True
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.args = args
+            self.kwargs = kwargs
 
         def act(self, *_: Any, **__: Any) -> int:
             return 0
 
     monkeypatch.setattr("collect.ai_controller.CollectPufferAgent", DummyAgent, raising=False)
+    monkeypatch.setenv("COLLECT_USE_PUFFER", "true")
 
     agent = AIController.default_agent()
     captured = capsys.readouterr()
 
     assert isinstance(agent, DummyAgent)
     assert "using PufferLib agent" in captured.out
+
+
+def test_default_agent_falls_back_when_puffer_missing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("collect.ai_controller.CollectPufferAgent", None, raising=False)
+    monkeypatch.setenv("COLLECT_USE_PUFFER", "1")
+
+    agent = AIController.default_agent()
+    captured = capsys.readouterr()
+
+    assert isinstance(agent, NeuralPolicyAgent)
+    assert "falling back to built-in neural agent" in captured.out
 
 
 def test_controllers_use_distinct_agents() -> None:

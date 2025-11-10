@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
+from collect.ai_controller import AIController
 from collect.game import AgentFeedback, Game
-from collect.types import ControllerType, Observation, Player
+from collect.neural_agent import NeuralPolicyAgent
+from collect.types import Action, ControllerType, Observation, Player
 
 
 class DummyController:
@@ -45,4 +49,32 @@ def test_game_apply_agent_feedback_forwards_terminal_flag() -> None:
         (1.0, terminal_observation, True),
         (0.25, ongoing_observation, False),
     ]
+
+
+def test_game_epsilon_percent_returns_average_of_agents() -> None:
+    game = Game.__new__(Game)
+    agent_a = NeuralPolicyAgent(
+        state_size=Observation.vector_length(),
+        action_size=len(Action),
+    )
+    agent_b = NeuralPolicyAgent(
+        state_size=Observation.vector_length(),
+        action_size=len(Action),
+    )
+    agent_a.epsilon = 0.4
+    agent_b.epsilon = 0.2
+
+    controller_a = AIController.__new__(AIController)
+    controller_a.player_identifier = 0
+    controller_a._agent = agent_a
+    controller_b = AIController.__new__(AIController)
+    controller_b.player_identifier = 1
+    controller_b._agent = agent_b
+
+    game._ai_controllers = {
+        0: controller_a,
+        1: controller_b,
+    }
+
+    assert game._epsilon_percent() == pytest.approx(30.0)
 

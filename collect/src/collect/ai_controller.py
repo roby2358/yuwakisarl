@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from typing import Optional
 
 from .neural_agent import NeuralPolicyAgent
@@ -33,10 +34,13 @@ class AIController:
 
     @classmethod
     def default_agent(cls) -> object:
-        agent = cls._build_puffer_agent()
-        if agent is not None:
-            return agent
-        print("AIController: using built-in neural agent")
+        prefer_puffer = os.getenv("COLLECT_USE_PUFFER", "").strip().lower() in {"1", "true", "yes"}
+        if prefer_puffer:
+            agent = cls._build_puffer_agent()
+            if agent is not None:
+                print("AIController: using PufferLib agent")
+                return agent
+            print("AIController: falling back to built-in neural agent")
         return NeuralPolicyAgent(state_size=cls._encoded_state_length, action_size=len(Action))
 
     @classmethod
@@ -52,7 +56,6 @@ class AIController:
                 return None
         except Exception:  # pragma: no cover - defensive
             return None
-        print("AIController: using PufferLib agent")
         return agent
 
     def _build_agent(self) -> object:
@@ -104,4 +107,13 @@ class AIController:
                 agent.observe(reward, next_state, is_terminal, self.player_identifier)  # type: ignore[attr-defined]
             except TypeError:
                 agent.observe(reward, next_state, is_terminal)  # type: ignore[attr-defined]
+
+    def exploration_rate(self) -> float | None:
+        agent = self._agent
+        if agent is None:
+            return None
+        epsilon = getattr(agent, "epsilon", None)
+        if isinstance(epsilon, (int, float)):
+            return float(epsilon)
+        return None
 

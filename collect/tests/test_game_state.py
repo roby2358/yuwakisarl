@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Iterator, Tuple
 
 import pytest
@@ -154,7 +155,11 @@ def test_distance_to_goal_with_resource_targets_center(monkeypatch: pytest.Monke
     carrying_player = Player(identifier=0, position=(60, 90), controller=ControllerType.AI, has_resource=True)
     distance = state._distance_to_goal(carrying_player, tuple(), state.target)
 
-    assert distance == abs(carrying_player.position[0] - state.target[0]) + abs(carrying_player.position[1] - state.target[1])
+    expected = math.hypot(
+        carrying_player.position[0] - state.target[0],
+        carrying_player.position[1] - state.target[1],
+    )
+    assert distance == pytest.approx(expected)
 
 
 def test_resources_never_spawn_in_target_zone(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -372,9 +377,13 @@ def test_monster_reward_negative_when_distance_decreases() -> None:
     assert reward == pytest.approx(-0.05)
 
 
-def _expected_magnitude(distance: int) -> float:
-    max_distance = FIELD_DIMENSIONS.width + FIELD_DIMENSIONS.height - 2
-    return SHAPING_REWARD_MIN + (SHAPING_REWARD_MAX - SHAPING_REWARD_MIN) * (distance / max_distance)
+def _expected_magnitude(distance: float) -> float:
+    max_distance = math.hypot(FIELD_DIMENSIONS.width - 1, FIELD_DIMENSIONS.height - 1)
+    if max_distance == 0:
+        return SHAPING_REWARD_MIN
+    clamped = max(0.0, min(distance, max_distance))
+    scale = clamped / max_distance
+    return SHAPING_REWARD_MIN + (SHAPING_REWARD_MAX - SHAPING_REWARD_MIN) * scale
 
 
 def test_shaping_reward_scales_positive_with_distance() -> None:
@@ -388,13 +397,11 @@ def test_shaping_reward_scales_positive_with_distance() -> None:
         monster=(0, 0),
     )
 
-    before_distance = 4
-    reward = state._shaping_reward(player_index=0, before_distance=before_distance)
-
     after_distance = state._distance_to_goal(configured_player, state.resources, state.target)
     assert after_distance is not None
 
-    assert after_distance < before_distance
+    reward = state._shaping_reward(player_index=0, before_distance=after_distance + 1.0)
+
     assert reward == pytest.approx(_expected_magnitude(after_distance))
 
 
@@ -409,11 +416,10 @@ def test_shaping_reward_scales_negative_with_distance() -> None:
         monster=(0, 0),
     )
 
-    before_distance = 9
-    reward = state._shaping_reward(player_index=0, before_distance=before_distance)
-
     after_distance = state._distance_to_goal(configured_player, state.resources, state.target)
     assert after_distance is not None
+
+    reward = state._shaping_reward(player_index=0, before_distance=max(0.0, after_distance - 1.0))
 
     assert reward == pytest.approx(-_expected_magnitude(after_distance))
 
@@ -429,7 +435,7 @@ def test_shaping_reward_uses_minimum_when_distance_zero() -> None:
         monster=(0, 0),
     )
 
-    reward = state._shaping_reward(player_index=0, before_distance=1)
+    reward = state._shaping_reward(player_index=0, before_distance=1.0)
 
     assert reward == pytest.approx(_expected_magnitude(0))
 

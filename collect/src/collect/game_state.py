@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import math
 from dataclasses import dataclass, replace
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -53,8 +54,10 @@ def _move(position: GridPosition, action: Action) -> GridPosition:
     return (x_pos + delta_x, y_pos + delta_y)
 
 
-def _manhattan_distance(a: GridPosition, b: GridPosition) -> int:
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+def _euclidean_distance(a: GridPosition, b: GridPosition) -> float:
+    delta_x = a[0] - b[0]
+    delta_y = a[1] - b[1]
+    return math.hypot(delta_x, delta_y)
 
 
 def _is_within_bounds(position: GridPosition) -> bool:
@@ -278,17 +281,17 @@ class GameState:
 
     def _distance_to_goal(
         self, player: Player, resources: Tuple[GridPosition, ...], target: GridPosition
-    ) -> Optional[int]:
+    ) -> Optional[float]:
         if player.has_resource:
-            return _manhattan_distance(player.position, target)
+            return _euclidean_distance(player.position, target)
         if not resources:
             return None
-        return min(_manhattan_distance(player.position, resource) for resource in resources)
+        return min(_euclidean_distance(player.position, resource) for resource in resources)
 
-    def _distance_to_monster(self, player: Player, monster_position: GridPosition) -> int:
-        return _manhattan_distance(player.position, monster_position)
+    def _distance_to_monster(self, player: Player, monster_position: GridPosition) -> float:
+        return _euclidean_distance(player.position, monster_position)
 
-    def _shaping_reward(self, player_index: int, before_distance: Optional[int]) -> float:
+    def _shaping_reward(self, player_index: int, before_distance: Optional[float]) -> float:
         if before_distance is None:
             return 0.0
         player = self._objects.players[player_index]
@@ -296,12 +299,12 @@ class GameState:
         if after_distance is None:
             return 0.0
 
-        max_distance = FIELD_DIMENSIONS.width + FIELD_DIMENSIONS.height - 2
-        if max_distance <= 0:
+        max_distance = math.hypot(FIELD_DIMENSIONS.width - 1, FIELD_DIMENSIONS.height - 1)
+        if max_distance <= 0.0:
             return 0.0
 
-        def scaled_magnitude(distance: int) -> float:
-            clamped_distance = max(0, min(distance, max_distance))
+        def scaled_magnitude(distance: float) -> float:
+            clamped_distance = max(0.0, min(distance, max_distance))
             scale = clamped_distance / max_distance
             delta = SHAPING_REWARD_MAX - SHAPING_REWARD_MIN
             return SHAPING_REWARD_MIN + (delta * scale)
@@ -312,7 +315,7 @@ class GameState:
         return -scaled_magnitude(magnitude_distance)
 
     def _monster_distance_reward(
-        self, before_distance: Optional[int], after_distance: Optional[int]
+        self, before_distance: Optional[float], after_distance: Optional[float]
     ) -> float:
         if before_distance is None or after_distance is None:
             return 0.0
@@ -331,7 +334,7 @@ class GameState:
         if random.random() >= 0.3:
             return
         monster_position = self._objects.monster
-        target_player = min(carriers, key=lambda candidate: _manhattan_distance(candidate.position, monster_position))
+        target_player = min(carriers, key=lambda candidate: _euclidean_distance(candidate.position, monster_position))
         step_x = self._step_towards(monster_position[0], target_player.position[0])
         step_y = self._step_towards(monster_position[1], target_player.position[1])
         next_position = (monster_position[0] + step_x, monster_position[1] + step_y)
