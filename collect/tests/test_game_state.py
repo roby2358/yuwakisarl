@@ -7,7 +7,7 @@ from typing import Iterator, Tuple
 
 import pytest
 
-from collect.config import FIELD_DIMENSIONS, SHAPING_REWARD_MAX, SHAPING_REWARD_MIN
+from collect.config import FIELD_DIMENSIONS, MONSTER_REWARD_MAX, MONSTER_REWARD_SCALE, SHAPING_REWARD_MAX, SHAPING_REWARD_MIN
 from collect.game_state import GameObjects, GameState
 from collect.types import Action, ControllerType, Player
 
@@ -358,7 +358,7 @@ def test_monster_reward_positive_when_distance_increases() -> None:
 
     reward = state.update_player(0, Action.MOVE_RIGHT)
 
-    assert reward == pytest.approx(0.05)
+    assert reward == pytest.approx(-MONSTER_REWARD_SCALE)
 
 
 def test_monster_reward_negative_when_distance_decreases() -> None:
@@ -374,7 +374,7 @@ def test_monster_reward_negative_when_distance_decreases() -> None:
 
     reward = state.update_player(0, Action.MOVE_RIGHT)
 
-    assert reward == pytest.approx(-0.05)
+    assert reward == pytest.approx(MONSTER_REWARD_SCALE)
 
 
 def _expected_magnitude(distance: float) -> float:

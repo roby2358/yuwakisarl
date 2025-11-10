@@ -7,7 +7,14 @@ import math
 from dataclasses import dataclass, replace
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .config import COLLISION_PENALTY, FIELD_DIMENSIONS, SHAPING_REWARD_MAX, SHAPING_REWARD_MIN
+from .config import (
+    COLLISION_PENALTY,
+    FIELD_DIMENSIONS,
+    MONSTER_REWARD_MAX,
+    MONSTER_REWARD_SCALE,
+    SHAPING_REWARD_MAX,
+    SHAPING_REWARD_MIN,
+)
 from .types import Action, ControllerType, GridPosition, Player
 
 
@@ -324,10 +331,8 @@ class GameState:
         if before_distance == after_distance:
             return 0.0
         delta = after_distance - before_distance
-        magnitude = min(0.5, abs(delta) * 0.05)
-        if delta > 0:
-            return magnitude
-        return -magnitude
+        magnitude = min(MONSTER_REWARD_MAX, abs(delta) * MONSTER_REWARD_SCALE)
+        return -magnitude if delta > 0 else magnitude
 
     def _maybe_move_monster(self) -> None:
         carriers = [player for player in self._objects.players if player.has_resource]
