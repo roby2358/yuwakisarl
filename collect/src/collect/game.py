@@ -145,6 +145,7 @@ class Game:
                     target=self._state.target,
                 )
                 controller.observe(reward, next_observation)
+        self._state.advance_environment()
 
     def _select_action(
         self,

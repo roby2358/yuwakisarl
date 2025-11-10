@@ -108,16 +108,19 @@ class CollectPufferAgent:
         self,
         state_size: int,
         action_size: int,
-        hidden_size: int = 128,
+        hidden_size: int = 640,
         learning_rate: float = 3e-4,
         entropy_coef: float = 1e-3,
         value_coef: float = 0.5,
         max_grad_norm: float = 1.0,
+        discount: float = 0.99,
     ) -> None:
         if state_size <= 0:
             raise ValueError("state_size must be positive")
         if action_size <= 0:
             raise ValueError("action_size must be positive")
+        if discount < 0.0 or discount > 1.0:
+            raise ValueError("discount must be between 0.0 and 1.0")
 
         self._device = torch.device("cpu")
         self._spec = _CollectEnvSpec(state_size, action_size)
@@ -127,6 +130,7 @@ class CollectPufferAgent:
         self._entropy_coef = float(entropy_coef)
         self._value_coef = float(value_coef)
         self._max_grad_norm = float(max_grad_norm)
+        self._discount = float(discount)
         self._traces: Dict[int, _Trace] = {}
 
     def act(self, state: Sequence[float], actor_id: int = 0) -> int:
@@ -152,9 +156,17 @@ class CollectPufferAgent:
         logits = logits.squeeze(0)
         value = value.squeeze(0)
 
+        next_state_array = self._to_state_array(next_state)
+        next_state_tensor = torch.from_numpy(next_state_array).to(self._device)
+        with torch.no_grad():
+            _, next_value = self._policy.forward_eval(next_state_tensor.unsqueeze(0))
+        next_value = next_value.squeeze(0)
+
+        target_value = reward_tensor + self._discount * next_value
+
         distribution = Categorical(logits=logits)
         log_prob = distribution.log_prob(torch.tensor(trace.action, device=self._device))
-        advantage = reward_tensor - value
+        advantage = target_value - value
 
         policy_loss = -log_prob * advantage.detach()
         value_loss = 0.5 * advantage.pow(2)

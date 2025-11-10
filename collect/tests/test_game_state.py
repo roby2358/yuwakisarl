@@ -284,22 +284,19 @@ def test_monster_moves_toward_nearest_carrier(monkeypatch: pytest.MonkeyPatch) -
     )
 
     state.update_player(0, Action.STAY)
+    state.advance_environment()
 
     assert state.monster == (1, 1)
 
 
 def test_monster_steals_resource_when_colliding(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("collect.config.RESOURCE_COUNT", 0, raising=False)
     monkeypatch.setattr("collect.game_state.random.random", lambda: 0.0)
-    new_resource_cells = deterministic_cells((6, 6))
-
-    def next_cell(exclusions: tuple[Tuple[int, int], ...]) -> Tuple[int, int]:
-        while True:
-            candidate = next(new_resource_cells)
-            if candidate in exclusions:
-                continue
-            return candidate
-
-    monkeypatch.setattr("collect.game_state._random_cell", next_cell)
+    monkeypatch.setattr(
+        "collect.game_state.GameState._random_resource_position",
+        lambda self, *_: (6, 6),
+        raising=False,
+    )
     carrier = Player(identifier=0, position=(4, 4), controller=ControllerType.AI).with_resource(True)
     state = GameState([carrier])
     state._objects = GameObjects(
@@ -310,6 +307,7 @@ def test_monster_steals_resource_when_colliding(monkeypatch: pytest.MonkeyPatch)
     )
 
     state.update_player(0, Action.STAY)
+    state.advance_environment()
 
     assert state.players[0].has_resource is False
     assert state.monster == (4, 4)
@@ -332,11 +330,13 @@ def test_monster_moves_only_when_random_below_threshold(monkeypatch: pytest.Monk
     monkeypatch.setattr("collect.game_state.random.random", lambda: 0.29)
     moving_state = build_state()
     moving_state.update_player(0, Action.STAY)
+    moving_state.advance_environment()
     assert moving_state.monster == (1, 1)
 
     monkeypatch.setattr("collect.game_state.random.random", lambda: 0.3)
     stationary_state = build_state()
     stationary_state.update_player(0, Action.STAY)
+    stationary_state.advance_environment()
     assert stationary_state.monster == (0, 0)
 
 

@@ -22,7 +22,7 @@ class NeuralPolicyAgent:
 
     state_size: int
     action_size: int
-    hidden_size: int = 128
+    hidden_size: int = 640
     hidden_layers: int = 3
     learning_rate: float = 0.01
     epsilon: float = 0.8
@@ -48,7 +48,7 @@ class NeuralPolicyAgent:
         for _ in range(self.hidden_layers):
             layer_scale = math.sqrt(2.0 / max(1, fan_in))
             weight = rng.normal(0.0, layer_scale, size=(fan_in, self.hidden_size)).astype(np.float32)
-            bias = np.zeros(self.hidden_size, dtype=np.float32)
+            bias = rng.normal(0.0, layer_scale, size=self.hidden_size).astype(np.float32)
             weights.append(weight)
             biases.append(bias)
             fan_in = self.hidden_size
@@ -91,6 +91,10 @@ class NeuralPolicyAgent:
             return
 
         activations, probs, action = trace
+        base_weights = tuple(layer.copy() for layer in self._weights)
+        base_biases = tuple(layer.copy() for layer in self._biases)
+        weight_updates = [np.zeros_like(layer) for layer in base_weights]
+        bias_updates = [np.zeros_like(layer) for layer in base_biases]
 
         advantage = reward - self._baseline
         self._baseline = self.baseline_momentum * self._baseline + (1 - self.baseline_momentum) * reward
@@ -99,16 +103,25 @@ class NeuralPolicyAgent:
         one_hot[action] = 1.0
 
         delta2 = (one_hot - probs) * advantage
-        self._weights[-1] += self.learning_rate * np.outer(activations[-1], delta2)
-        self._biases[-1] += self.learning_rate * delta2
+        final_activation = activations[-1]
+        if np.allclose(final_activation, 0.0):
+            final_activation = np.ones_like(final_activation)
+        weight_updates[-1] = self.learning_rate * np.outer(final_activation, delta2)
+        bias_updates[-1] = self.learning_rate * delta2
 
         delta = delta2
         for layer_index in range(self.hidden_layers - 1, -1, -1):
             hidden_output = activations[layer_index + 1]
             derivative = 1.0 - hidden_output**2
-            delta = (delta @ self._weights[layer_index + 1].T) * derivative
-            self._weights[layer_index] += self.learning_rate * np.outer(activations[layer_index], delta)
-            self._biases[layer_index] += self.learning_rate * delta
+            delta = (delta @ base_weights[layer_index + 1].T) * derivative
+            layer_activation = activations[layer_index]
+            if np.allclose(layer_activation, 0.0):
+                layer_activation = np.ones_like(layer_activation)
+            weight_updates[layer_index] = self.learning_rate * np.outer(layer_activation, delta)
+            bias_updates[layer_index] = self.learning_rate * delta
+
+        self._weights = tuple(base + update for base, update in zip(base_weights, weight_updates))
+        self._biases = tuple(base + update for base, update in zip(base_biases, bias_updates))
 
     def _decay_epsilon(self) -> None:
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)

@@ -155,7 +155,6 @@ class GameState:
         player_after_move = self._objects.players[player_index]
         after_monster_distance = self._distance_to_monster(player_after_move, monster_position_before)
         monster_reward = self._monster_distance_reward(before_monster_distance, after_monster_distance)
-        self._maybe_move_monster()
         return shaping + penalty + float(after_score - before_score) + monster_reward
 
     def _apply_move(self, player_index: int, position: GridPosition) -> GameObjects:
@@ -366,6 +365,10 @@ class GameState:
             )
             resources.append(new_resource)
             return
+
+    def advance_environment(self) -> None:
+        """Advance non-player entities such as the monster."""
+        self._maybe_move_monster()
 
     def _step_towards(self, start: int, end: int) -> int:
         if end > start:
