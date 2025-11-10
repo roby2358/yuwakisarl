@@ -20,6 +20,7 @@ def test_neural_policy_agent_initializes_multi_layer():
 
     assert agent._weights[-1].shape == (agent.hidden_size, agent.action_size)
     assert agent._biases[-1].shape == (agent.action_size,)
+    assert agent.epsilon == pytest.approx(0.6)
 
 
 def test_neural_policy_agent_act_and_learn_updates_all_layers():
@@ -116,3 +117,14 @@ def test_neural_policy_agent_backprop_uses_pre_update_weights():
     np.testing.assert_allclose(agent._biases[0], expected_biases[0], rtol=1e-6, atol=1e-6)
     np.testing.assert_allclose(agent._biases[1], expected_biases[1], rtol=1e-6, atol=1e-6)
     assert agent._baseline == pytest.approx(expected_baseline)
+
+
+def test_neural_policy_agent_epsilon_decay_progresses_monotonically():
+    state_size = Observation.vector_length()
+    agent = NeuralPolicyAgent(state_size=state_size, action_size=9)
+    agent.epsilon = 1.0
+    agent.epsilon_min = 0.0
+
+    agent._decay_epsilon()
+
+    assert agent.epsilon == pytest.approx(agent.epsilon_decay)
