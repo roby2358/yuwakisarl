@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-import pygame
+try:
+    import pygame
+except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
+    pygame = None  # type: ignore[assignment]
 
 from .config import (
     BACKGROUND_COLOR,
@@ -21,7 +24,9 @@ from .types import Player
 class Renderer:
     """Renders the current game state onto a pygame surface."""
 
-    def __init__(self, surface: pygame.Surface, font: pygame.font.Font) -> None:
+    def __init__(self, surface: "pygame.Surface", font: "pygame.font.Font") -> None:  # type: ignore[name-defined]
+        if pygame is None:
+            raise RuntimeError("pygame is required for rendering; install pygame to draw the game")
         self._surface = surface
         self._font = font
         self._grid_surface = self._build_grid_surface()

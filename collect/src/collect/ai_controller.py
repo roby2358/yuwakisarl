@@ -89,19 +89,19 @@ class AIController:
                 return Action.from_delta(int(dx), int(dy))
         return None
 
-    def observe(self, reward: float, next_observation: Observation) -> None:
+    def observe(self, reward: float, next_observation: Observation, is_terminal: bool) -> None:
         agent = self._agent
         if agent is None:
             return
         next_state = next_observation.as_vector()
         if hasattr(agent, "learn"):
             try:
-                agent.learn(reward, next_state, self.player_identifier)  # type: ignore[attr-defined]
+                agent.learn(reward, next_state, is_terminal, self.player_identifier)  # type: ignore[attr-defined]
             except TypeError:
-                agent.learn(reward, next_state)  # type: ignore[attr-defined]
+                agent.learn(reward, next_state, is_terminal)  # type: ignore[attr-defined]
         elif hasattr(agent, "observe"):
             try:
-                agent.observe(reward, next_state, self.player_identifier)  # type: ignore[attr-defined]
+                agent.observe(reward, next_state, is_terminal, self.player_identifier)  # type: ignore[attr-defined]
             except TypeError:
-                agent.observe(reward, next_state)  # type: ignore[attr-defined]
+                agent.observe(reward, next_state, is_terminal)  # type: ignore[attr-defined]
 

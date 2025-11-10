@@ -144,7 +144,7 @@ class CollectPufferAgent:
         self._traces[actor_id] = _Trace(state=state_tensor.detach(), action=action)
         return action
 
-    def learn(self, reward: float, next_state: Sequence[float], actor_id: int = 0) -> None:  # noqa: ARG002
+    def learn(self, reward: float, next_state: Sequence[float], done: bool, actor_id: int = 0) -> None:
         trace = self._traces.pop(actor_id, None)
         if trace is None:
             return
@@ -156,17 +156,20 @@ class CollectPufferAgent:
         logits = logits.squeeze(0)
         value = value.squeeze(0)
 
-        next_state_array = self._to_state_array(next_state)
-        next_state_tensor = torch.from_numpy(next_state_array).to(self._device)
-        with torch.no_grad():
-            _, next_value = self._policy.forward_eval(next_state_tensor.unsqueeze(0))
-        next_value = next_value.squeeze(0)
+        if done:
+            target_value = reward_tensor
+        else:
+            next_state_array = self._to_state_array(next_state)
+            next_state_tensor = torch.from_numpy(next_state_array).to(self._device)
+            with torch.no_grad():
+                _, next_value = self._policy.forward_eval(next_state_tensor.unsqueeze(0))
+            next_value = next_value.squeeze(0)
+            target_value = reward_tensor + self._discount * next_value
 
-        target_value = reward_tensor + self._discount * next_value
+        advantage = target_value - value
 
         distribution = Categorical(logits=logits)
         log_prob = distribution.log_prob(torch.tensor(trace.action, device=self._device))
-        advantage = target_value - value
 
         policy_loss = -log_prob * advantage.detach()
         value_loss = 0.5 * advantage.pow(2)
@@ -179,8 +182,8 @@ class CollectPufferAgent:
         torch.nn.utils.clip_grad_norm_(self._policy.parameters(), self._max_grad_norm)
         self._optimizer.step()
 
-    def observe(self, reward: float, next_state: Sequence[float], actor_id: int = 0) -> None:
-        self.learn(reward, next_state, actor_id)
+    def observe(self, reward: float, next_state: Sequence[float], done: bool, actor_id: int = 0) -> None:
+        self.learn(reward, next_state, done, actor_id)
 
     def _to_state_array(self, state: Sequence[float]) -> np.ndarray:
         state_array = np.asarray(state, dtype=_FLOAT_DTYPE)

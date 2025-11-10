@@ -41,7 +41,7 @@ def test_neural_policy_agent_act_and_learn_updates_all_layers():
     weights_before = tuple(weight.copy() for weight in agent._weights)
     biases_before = tuple(bias.copy() for bias in agent._biases)
 
-    agent.learn(reward=1.0, next_state=state)
+    agent.learn(reward=1.0, next_state=state, done=False)
 
     assert all(np.any(after != before) for before, after in zip(weights_before, agent._weights))
     assert all(np.any(after != before) for before, after in zip(biases_before, agent._biases))
@@ -109,7 +109,7 @@ def test_neural_policy_agent_backprop_uses_pre_update_weights():
 
     expected_baseline = agent.baseline_momentum * initial_baseline + (1 - agent.baseline_momentum) * reward
 
-    agent.learn(reward=reward, next_state=state)
+    agent.learn(reward=reward, next_state=state, done=False)
 
     np.testing.assert_allclose(agent._weights[0], expected_weights[0], rtol=1e-6, atol=1e-6)
     np.testing.assert_allclose(agent._weights[1], expected_weights[1], rtol=1e-6, atol=1e-6)

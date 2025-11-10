@@ -8,6 +8,16 @@ Status: ToDo
 ID: rlshare-z7q4
 Introduce an agent-sharing mechanism in `AIController` (or update documentation/tests) so AI-controlled players can optionally share a single learner instance when desired, preventing divergence from the RL guide.
 ---
+Priority:   45
+Status: ToDo
+ID: rlgrad-kd8x
+Remove the zero-activation overwrite in NeuralPolicyAgent.learn and replace it with a mathematically correct gradient handling strategy, backed by a regression test.
+---
+Priority:    0
+Status: Done
+ID: rlterm-zmt2
+Surface episode termination to AI-controlled agents so TD bootstrapping is disabled when a round resets, and cover the boundary case with controller/game loop tests.
+---
 Priority:    0
 Status: Done
 ID: rldoc-fq5b

@@ -85,7 +85,7 @@ class NeuralPolicyAgent:
         self._decay_epsilon()
         return action
 
-    def learn(self, reward: float, next_state: Sequence[float], actor_id: int = 0) -> None:  # noqa: ARG002
+    def learn(self, reward: float, next_state: Sequence[float], done: bool, actor_id: int = 0) -> None:  # noqa: ARG002
         trace = self._traces.pop(actor_id, None)
         if trace is None:
             return

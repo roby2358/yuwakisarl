@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
-import pygame
+try:
+    import pygame
+except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
+    pygame = None  # type: ignore[assignment]
 
 from .ai_controller import AIController
 from .config import (
@@ -22,10 +26,21 @@ from .renderer import Renderer
 from .types import Action, ControllerType, Observation, Player
 
 
+@dataclass(frozen=True)
+class AgentFeedback:
+    """Stores the feedback required to update an agent after a tick."""
+
+    controller: AIController
+    reward: float
+    next_observation: Observation
+
+
 class Game:
     """Encapsulates the Collect game runtime."""
 
     def __init__(self, player_count: int = DEFAULT_PLAYER_COUNT) -> None:
+        if pygame is None:
+            raise RuntimeError("pygame is required to run the Collect game loop; install pygame to continue")
         pygame.init()
         pygame.display.set_caption("Collect")
         width = FIELD_DIMENSIONS.width * CELL_SIZE_PX
@@ -52,8 +67,8 @@ class Game:
             round_active = True
             paused = False
             while round_active and self._running:
-                elapsed = round_end_time - time.time()
-                if elapsed <= 0:
+                remaining_time = round_end_time - time.time()
+                if remaining_time <= 0:
                     round_active = False
                     break
                 for event in pygame.event.get():
@@ -73,21 +88,26 @@ class Game:
                         self._state.resources,
                         self._state.monster,
                         self._state.target,
-                        elapsed,
+                        remaining_time,
                         paused,
                     )
                     self._clock.tick(FRAME_RATE)
                     continue
-                self._tick_players()
+                feedback = self._tick_players()
+                remaining_time = max(0.0, round_end_time - time.time())
+                is_terminal = remaining_time <= 0.0
+                self._apply_agent_feedback(feedback, is_terminal)
                 self._renderer.draw(
                     self._state.players,
                     self._state.resources,
                     self._state.monster,
                     self._state.target,
-                    elapsed,
+                    remaining_time,
                     paused,
                 )
                 self._clock.tick(FRAME_RATE)
+                if is_terminal:
+                    round_active = False
             if not self._running:
                 break
             self._round_break()
@@ -122,7 +142,8 @@ class Game:
         self._human_player_identifier = player.identifier
         self._state.set_player_controller(player_index, ControllerType.HUMAN)
 
-    def _tick_players(self) -> None:
+    def _tick_players(self) -> List[AgentFeedback]:
+        feedback: List[AgentFeedback] = []
         pressed = pygame.key.get_pressed()
         for index, player in enumerate(self._state.players):
             controller = self._ai_controllers.get(player.identifier)
@@ -144,8 +165,19 @@ class Game:
                     monster=self._state.monster,
                     target=self._state.target,
                 )
-                controller.observe(reward, next_observation)
+                feedback.append(
+                    AgentFeedback(
+                        controller=controller,
+                        reward=reward,
+                        next_observation=next_observation,
+                    )
+                )
         self._state.advance_environment()
+        return feedback
+
+    def _apply_agent_feedback(self, feedback: List[AgentFeedback], is_terminal: bool) -> None:
+        for transition in feedback:
+            transition.controller.observe(transition.reward, transition.next_observation, is_terminal)
 
     def _select_action(
         self,
