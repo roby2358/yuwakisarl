@@ -1,8 +1,35 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 
 from collect.neural_agent import NeuralPolicyAgent
 from collect.types import Observation
+
+
+def test_neural_policy_agent_uses_configured_architecture() -> None:
+    agent = NeuralPolicyAgent(state_size=9, action_size=9)
+
+    assert agent.hidden_size == 128
+    assert agent.hidden_layers == 2
+
+    weights = agent._weights  # pylint: disable=protected-access
+    biases = agent._biases  # pylint: disable=protected-access
+
+    assert len(weights) == agent.hidden_layers + 1 == 3
+    assert weights[0].shape == (9, 128)
+    assert weights[1].shape == (128, 128)
+    assert weights[2].shape == (128, 9)
+
+    assert len(biases) == agent.hidden_layers + 1 == 3
+    assert biases[0].shape == (128,)
+    assert biases[1].shape == (128,)
+    assert biases[-1].shape == (9,)
+
+    sample_state = np.zeros(9, dtype=np.float32)
+    action = agent.act(sample_state, actor_id=0)
+
+    assert 0 <= action < 9
 
 
 def test_neural_policy_agent_initializes_multi_layer():
@@ -20,13 +47,14 @@ def test_neural_policy_agent_initializes_multi_layer():
 
     assert agent._weights[-1].shape == (agent.hidden_size, agent.action_size)
     assert agent._biases[-1].shape == (agent.action_size,)
-    assert agent.epsilon == pytest.approx(0.6)
+    assert agent.exploration_rate() == pytest.approx(0.6)
 
 
 def test_neural_policy_agent_act_and_learn_updates_all_layers():
     state_size = Observation.vector_length()
     agent = NeuralPolicyAgent(state_size=state_size, action_size=9)
-    agent.epsilon = 0.0
+    agent._epsilon_values[0] = 0.0
+    agent.epsilon_min = 0.0
 
     state = np.zeros(agent.state_size, dtype=np.float32)
     action = agent.act(state)
@@ -122,9 +150,21 @@ def test_neural_policy_agent_backprop_uses_pre_update_weights():
 def test_neural_policy_agent_epsilon_decay_progresses_monotonically():
     state_size = Observation.vector_length()
     agent = NeuralPolicyAgent(state_size=state_size, action_size=9)
-    agent.epsilon = 1.0
+    agent._epsilon_values[0] = 1.0
     agent.epsilon_min = 0.0
 
-    agent._decay_epsilon()
+    agent._decay_epsilon(0)
 
-    assert agent.epsilon == pytest.approx(agent.epsilon_decay)
+    assert agent.exploration_rate() == pytest.approx(agent.epsilon_decay)
+
+
+def test_neural_policy_agent_tracks_epsilon_per_actor_independently():
+    state_size = Observation.vector_length()
+    agent = NeuralPolicyAgent(state_size=state_size, action_size=9, epsilon_start=0.5, epsilon_min=0.0)
+    agent._epsilon_values[1] = 1.0
+    agent._epsilon_values[2] = 0.25
+
+    agent._decay_epsilon(1)
+
+    assert agent.exploration_rate(1) == pytest.approx(max(agent.epsilon_min, 1.0 * agent.epsilon_decay))
+    assert agent.exploration_rate(2) == pytest.approx(0.25)

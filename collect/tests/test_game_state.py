@@ -79,10 +79,64 @@ def test_player_delivers_resource(monkeypatch: pytest.MonkeyPatch) -> None:
     assert state.players[0].has_resource is True
     state.update_player(0, Action.MOVE_LEFT)
     assert state.players[0].position == (101, 100)
+    assert state.players[0].has_resource is True
+    assert state.players[0].score == 0
+    state.update_player(0, Action.MOVE_LEFT)
+    assert state.players[0].position == (100, 100)
     assert state.players[0].has_resource is False
     assert state.target == (100, 100)
     assert state.players[0].score == 1
     assert len(state.resources) == 1
+
+
+def test_player_delivers_resource_when_on_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "collect.game_state.GameState._random_resource_position",
+        lambda self, *_: (15, 15),
+        raising=False,
+    )
+    player = Player(identifier=0, position=(0, 0), controller=ControllerType.AI)
+    state = GameState([player])
+
+    carrier = Player(identifier=0, position=(99, 100), controller=ControllerType.AI, has_resource=True, score=0)
+    state._objects = GameObjects(
+        players=(carrier,),
+        resources=(),
+        target=(100, 100),
+        monster=(140, 140),
+    )
+    reward = state.update_player(0, Action.MOVE_RIGHT)
+
+    assert state.players[0].position == (100, 100)
+    assert state.players[0].has_resource is False
+    assert state.players[0].score == 1
+    assert state.resources == ((15, 15),)
+    assert reward > 0.0
+
+
+def test_player_adjacent_to_target_does_not_deliver(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_if_called(*_args, **_kwargs):
+        pytest.fail("Resource respawn should not be triggered when not delivering")
+
+    carrier = Player(identifier=0, position=(101, 100), controller=ControllerType.AI, has_resource=True)
+    state = GameState([carrier])
+    state._objects = GameObjects(
+        players=(carrier,),
+        resources=(),
+        target=(100, 100),
+        monster=(150, 150),
+    )
+    monkeypatch.setattr(
+        "collect.game_state.GameState._random_resource_position",
+        fail_if_called,
+        raising=False,
+    )
+
+    reward = state.update_player(0, Action.STAY)
+
+    assert state.players[0].position == (101, 100)
+    assert state.players[0].has_resource is True
+    assert state.players[0].score == 0
 
 
 def test_collision_drops_resource(monkeypatch: pytest.MonkeyPatch) -> None:

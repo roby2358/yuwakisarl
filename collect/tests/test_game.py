@@ -51,7 +51,7 @@ def test_game_apply_agent_feedback_forwards_terminal_flag() -> None:
     ]
 
 
-def test_game_epsilon_percent_returns_average_of_agents() -> None:
+def test_game_epsilon_by_player_returns_mapping() -> None:
     game = Game.__new__(Game)
     agent_a = NeuralPolicyAgent(
         state_size=Observation.vector_length(),
@@ -61,8 +61,8 @@ def test_game_epsilon_percent_returns_average_of_agents() -> None:
         state_size=Observation.vector_length(),
         action_size=len(Action),
     )
-    agent_a.epsilon = 0.4
-    agent_b.epsilon = 0.2
+    agent_a._epsilon_values[0] = 0.4
+    agent_b._epsilon_values[1] = 0.2
 
     controller_a = AIController.__new__(AIController)
     controller_a.player_identifier = 0
@@ -76,5 +76,9 @@ def test_game_epsilon_percent_returns_average_of_agents() -> None:
         1: controller_b,
     }
 
-    assert game._epsilon_percent() == pytest.approx(30.0)
+    epsilon_map = game._epsilon_by_player()
+
+    assert epsilon_map is not None
+    assert epsilon_map[0] == pytest.approx(40.0)
+    assert epsilon_map[1] == pytest.approx(20.0)
 

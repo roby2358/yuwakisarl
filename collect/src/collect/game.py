@@ -83,7 +83,7 @@ class Game:
                 if not round_active or not self._running:
                     break
                 if paused:
-                    epsilon_percent = self._epsilon_percent()
+                    epsilon_status = self._epsilon_by_player()
                     self._renderer.draw(
                         self._state.players,
                         self._state.resources,
@@ -91,7 +91,7 @@ class Game:
                         self._state.target,
                         remaining_time,
                         paused,
-                        epsilon_percent,
+                        epsilon_status,
                     )
                     self._clock.tick(FRAME_RATE)
                     continue
@@ -99,7 +99,7 @@ class Game:
                 remaining_time = max(0.0, round_end_time - time.time())
                 is_terminal = remaining_time <= 0.0
                 self._apply_agent_feedback(feedback, is_terminal)
-                epsilon_percent = self._epsilon_percent()
+                epsilon_status = self._epsilon_by_player()
                 self._renderer.draw(
                     self._state.players,
                     self._state.resources,
@@ -107,7 +107,7 @@ class Game:
                     self._state.target,
                     remaining_time,
                     paused,
-                    epsilon_percent,
+                    epsilon_status,
                 )
                 self._clock.tick(FRAME_RATE)
                 if is_terminal:
@@ -211,7 +211,7 @@ class Game:
                         self._running = False
                         break
             remaining = end_time - time.time()
-            epsilon_percent = self._epsilon_percent()
+            epsilon_status = self._epsilon_by_player()
             self._renderer.draw(
                 self._state.players,
                 self._state.resources,
@@ -219,7 +219,7 @@ class Game:
                 self._state.target,
                 remaining,
                 paused=True,
-                epsilon_percent=epsilon_percent,
+                epsilon_percentages=epsilon_status,
             )
             self._clock.tick(FRAME_RATE)
 
@@ -237,16 +237,16 @@ class Game:
             )
         return tuple(players)
 
-    def _epsilon_percent(self) -> float | None:
+    def _epsilon_by_player(self) -> dict[int, float] | None:
         if not self._ai_controllers:
             return None
-        values = []
-        for controller in self._ai_controllers.values():
+        values: dict[int, float] = {}
+        for identifier, controller in self._ai_controllers.items():
             exploration_rate = controller.exploration_rate()
             if exploration_rate is None:
                 continue
-            values.append(exploration_rate * 100.0)
+            values[identifier] = exploration_rate * 100.0
         if not values:
             return None
-        return sum(values) / len(values)
+        return values
 

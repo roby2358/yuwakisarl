@@ -112,6 +112,13 @@ class AIController:
         agent = self._agent
         if agent is None:
             return None
+        if hasattr(agent, "exploration_rate"):
+            try:
+                epsilon_value = agent.exploration_rate(self.player_identifier)  # type: ignore[attr-defined]
+            except TypeError:
+                epsilon_value = agent.exploration_rate()  # type: ignore[attr-defined]
+            if isinstance(epsilon_value, (int, float)):
+                return float(epsilon_value)
         epsilon = getattr(agent, "epsilon", None)
         if isinstance(epsilon, (int, float)):
             return float(epsilon)

@@ -39,7 +39,7 @@ class Renderer:
         target: tuple[int, int],
         round_seconds_remaining: float,
         paused: bool,
-        epsilon_percent: float | None = None,
+        epsilon_percentages: dict[int, float] | None = None,
     ) -> None:
         self._surface.blit(self._grid_surface, (0, 0))
         for player in players:
@@ -47,7 +47,7 @@ class Renderer:
         self._draw_resources(resources)
         self._draw_target(target)
         self._draw_monster(monster)
-        self._draw_hud(players, round_seconds_remaining, paused, epsilon_percent)
+        self._draw_hud(players, round_seconds_remaining, paused, epsilon_percentages)
         pygame.display.flip()
 
     def _build_grid_surface(self) -> pygame.Surface:
@@ -89,10 +89,10 @@ class Renderer:
         players: tuple[Player, ...],
         round_seconds_remaining: float,
         paused: bool,
-        epsilon_percent: float | None,
+        epsilon_percentages: dict[int, float] | None,
     ) -> None:
         hud_surface = self._font.render(
-            self._hud_text(players, round_seconds_remaining, paused, epsilon_percent),
+            self._hud_text(players, round_seconds_remaining, paused, epsilon_percentages),
             True,
             TEXT_COLOR,
         )
@@ -103,15 +103,21 @@ class Renderer:
         players: tuple[Player, ...],
         seconds_remaining: float,
         paused: bool,
-        epsilon_percent: float | None,
+        epsilon_percentages: dict[int, float] | None,
     ) -> str:
-        player_scores = ", ".join(f"P{player.identifier}: {player.score}" for player in players)
+        epsilon_lookup = epsilon_percentages or {}
+        player_scores = ", ".join(
+            self._player_fragment(player, epsilon_lookup.get(player.identifier))
+            for player in players
+        )
         seconds = max(0, int(seconds_remaining))
-        state = "paused" if paused else "running"
-        epsilon_fragment = ""
-        if epsilon_percent is not None:
-            epsilon_fragment = f" | ε {epsilon_percent:.1f}%"
-        return f"{state} | time {seconds}s | {player_scores}{epsilon_fragment}"
+        return f"{seconds}s | {player_scores}"
+
+    def _player_fragment(self, player: Player, epsilon_percent: float | None) -> str:
+        fragment = f"{player.identifier}: {player.score}"
+        if epsilon_percent is None:
+            return fragment
+        return f"{fragment} {epsilon_percent:.1f}%"
 
     def _cell_to_pixels(self, cell: tuple[int, int]) -> tuple[int, int]:
         cx, cy = cell
