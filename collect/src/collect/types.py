@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Dict, Tuple
+from typing import Dict, Iterable, Optional, Tuple
+
+from .config import FIELD_DIMENSIONS
 
 
 class ControllerType(Enum):
@@ -88,13 +90,123 @@ class Player:
         )
 
 
-@dataclass(frozen=True)
-class Observation:
-    """Snapshot provided to controllers when selecting actions."""
+def _distance_squared(a: GridPosition, b: GridPosition) -> int:
+    delta_x = a[0] - b[0]
+    delta_y = a[1] - b[1]
+    return delta_x * delta_x + delta_y * delta_y
 
-    player: Player
-    players: Tuple[Player, ...]
-    resources: Tuple[GridPosition, ...]
-    target: GridPosition
-    monster: GridPosition
+
+def _normalise_offset(delta: int, limit: int) -> float:
+    if limit <= 0:
+        return 0.0
+    return delta / float(limit)
+
+
+class Observation:
+    """Encodes controller-facing features derived from the game state."""
+
+    __slots__ = (
+        "player",
+        "players",
+        "resources",
+        "target",
+        "monster",
+        "_vector",
+    )
+
+    _VECTOR_LENGTH = 9
+
+    def __init__(
+        self,
+        *,
+        player: Player,
+        players: Tuple[Player, ...],
+        resources: Tuple[GridPosition, ...],
+        target: GridPosition,
+        monster: GridPosition,
+    ) -> None:
+        self.player = player
+        self.players = players
+        self.resources = resources
+        self.target = target
+        self.monster = monster
+        self._vector = self._compute_vector()
+
+    @classmethod
+    def vector_length(cls) -> int:
+        return cls._VECTOR_LENGTH
+
+    def as_vector(self) -> Tuple[float, ...]:
+        return self._vector
+
+    def _compute_vector(self) -> Tuple[float, ...]:
+        player_position = self.player.position
+        width_span = max(1, FIELD_DIMENSIONS.width - 1)
+        height_span = max(1, FIELD_DIMENSIONS.height - 1)
+
+        resource_offset = self._nearest_resource_offset(player_position, width_span, height_span)
+        target_offset = self._position_offset(self.target, player_position, width_span, height_span)
+        nearest_player_offset = self._nearest_player_offset(player_position, width_span, height_span)
+        monster_offset = self._position_offset(self.monster, player_position, width_span, height_span)
+        has_resource = 1.0 if self.player.has_resource else 0.0
+
+        return (
+            resource_offset[0],
+            resource_offset[1],
+            target_offset[0],
+            target_offset[1],
+            nearest_player_offset[0],
+            nearest_player_offset[1],
+            monster_offset[0],
+            monster_offset[1],
+            has_resource,
+        )
+
+    def _nearest_resource_offset(
+        self,
+        player_position: GridPosition,
+        width_span: int,
+        height_span: int,
+    ) -> Tuple[float, float]:
+        nearest = self._nearest_position(player_position, self.resources)
+        if nearest is None:
+            return (0.0, 0.0)
+        return self._position_offset(nearest, player_position, width_span, height_span)
+
+    def _nearest_player_offset(
+        self,
+        player_position: GridPosition,
+        width_span: int,
+        height_span: int,
+    ) -> Tuple[float, float]:
+        others = tuple(player for player in self.players if player.identifier != self.player.identifier)
+        candidates = tuple(player.position for player in others)
+        nearest = self._nearest_position(player_position, candidates)
+        if nearest is None:
+            return (0.0, 0.0)
+        return self._position_offset(nearest, player_position, width_span, height_span)
+
+    def _nearest_position(
+        self,
+        origin: GridPosition,
+        positions: Iterable[GridPosition],
+    ) -> Optional[GridPosition]:
+        candidates = list(positions)
+        if not candidates:
+            return None
+        return min(candidates, key=lambda position: _distance_squared(origin, position))
+
+    def _position_offset(
+        self,
+        position: GridPosition,
+        origin: GridPosition,
+        width_span: int,
+        height_span: int,
+    ) -> Tuple[float, float]:
+        delta_x = position[0] - origin[0]
+        delta_y = position[1] - origin[1]
+        return (
+            _normalise_offset(delta_x, width_span),
+            _normalise_offset(delta_y, height_span),
+        )
 

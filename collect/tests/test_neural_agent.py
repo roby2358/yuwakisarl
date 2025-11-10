@@ -1,10 +1,12 @@
 import numpy as np
 
 from collect.neural_agent import NeuralPolicyAgent
+from collect.types import Observation
 
 
 def test_neural_policy_agent_initializes_multi_layer():
-    agent = NeuralPolicyAgent(state_size=14, action_size=9)
+    state_size = Observation.vector_length()
+    agent = NeuralPolicyAgent(state_size=state_size, action_size=9)
 
     assert len(agent._weights) == agent.hidden_layers + 1
     assert len(agent._biases) == agent.hidden_layers + 1
@@ -20,7 +22,8 @@ def test_neural_policy_agent_initializes_multi_layer():
 
 
 def test_neural_policy_agent_act_and_learn_updates_all_layers():
-    agent = NeuralPolicyAgent(state_size=14, action_size=9)
+    state_size = Observation.vector_length()
+    agent = NeuralPolicyAgent(state_size=state_size, action_size=9)
     agent.epsilon = 0.0
 
     state = np.zeros(agent.state_size, dtype=np.float32)

@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence, Tuple
+from typing import Optional
 
-from .config import FIELD_DIMENSIONS
 from .neural_agent import NeuralPolicyAgent
-from .types import Action, Observation, Player
+from .types import Action, Observation
 
 try:
     from .puffer_agent import CollectPufferAgent
@@ -21,7 +20,7 @@ class AIController:
 
     player_identifier: int
     _agent: object = field(init=False)
-    _encoded_state_length: int = 14
+    _encoded_state_length: int = Observation.vector_length()
 
     def __post_init__(self) -> None:
         self._agent = self._build_agent()
@@ -63,55 +62,12 @@ class AIController:
         agent = self._agent
         if agent is None:
             return None
-        state_vector = self._encode_observation(observation)
+        state_vector = observation.as_vector()
         try:
             raw_action = agent.act(state_vector, self.player_identifier)  # type: ignore[attr-defined]
         except TypeError:
             raw_action = agent.act(state_vector)  # type: ignore[attr-defined]
         return self._map_agent_action(raw_action)
-
-    def _encode_observation(self, observation: Observation) -> Sequence[float]:
-        player = observation.player
-        px, py = player.position
-        tx, ty = observation.target
-        rx, ry = self._nearest_resource(player.position, observation.resources)
-        nearest_player_offset = self._nearest_player_offset(player, observation.players)
-        width = max(1, FIELD_DIMENSIONS.width - 1)
-        height = max(1, FIELD_DIMENSIONS.height - 1)
-        px_n = float(px) / width
-        py_n = float(py) / height
-        rx_n = float(rx) / width
-        ry_n = float(ry) / height
-        tx_n = float(tx) / width
-        ty_n = float(ty) / height
-        dx_resource = (rx - px) / width
-        dy_resource = (ry - py) / height
-        dx_player = nearest_player_offset[0] / width
-        dy_player = nearest_player_offset[1] / height
-        if player.has_resource:
-            dx_target = (tx - px) / width
-            dy_target = (ty - py) / height
-        else:
-            dx_target = dx_resource
-            dy_target = dy_resource
-        has_resource = 1.0 if player.has_resource else 0.0
-        score = float(player.score)
-        return (
-            px_n,
-            py_n,
-            rx_n,
-            ry_n,
-            tx_n,
-            ty_n,
-            dx_resource,
-            dy_resource,
-            dx_target,
-            dy_target,
-            dx_player,
-            dy_player,
-            has_resource,
-            score,
-        )
 
     def _map_agent_action(self, raw_action: object) -> Optional[Action]:
         if isinstance(raw_action, int):
@@ -133,30 +89,11 @@ class AIController:
                 return Action.from_delta(int(dx), int(dy))
         return None
 
-    def _distance_squared(self, start: Tuple[int, int], end: Tuple[int, int]) -> float:
-        dx = start[0] - end[0]
-        dy = start[1] - end[1]
-        return float(dx * dx + dy * dy)
-
-    def _nearest_resource(
-        self, position: Tuple[int, int], resources: Tuple[Tuple[int, int], ...]
-    ) -> Tuple[int, int]:
-        if not resources:
-            return position
-        return min(resources, key=lambda resource: self._distance_squared(position, resource))
-
-    def _nearest_player_offset(self, player: Player, players: Tuple[Player, ...]) -> Tuple[int, int]:
-        candidates = [other for other in players if other.identifier != player.identifier]
-        if not candidates:
-            return (0, 0)
-        closest = min(candidates, key=lambda other: self._distance_squared(player.position, other.position))
-        return (closest.position[0] - player.position[0], closest.position[1] - player.position[1])
-
     def observe(self, reward: float, next_observation: Observation) -> None:
         agent = self._agent
         if agent is None:
             return
-        next_state = self._encode_observation(next_observation)
+        next_state = next_observation.as_vector()
         if hasattr(agent, "learn"):
             try:
                 agent.learn(reward, next_state, self.player_identifier)  # type: ignore[attr-defined]
