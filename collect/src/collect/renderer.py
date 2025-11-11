@@ -93,12 +93,13 @@ class Renderer:
         rolling_scores: dict[int, int] | None,
         epsilon_percentages: dict[int, float] | None,
     ) -> None:
-        hud_surface = self._font.render(
-            self._hud_text(players, round_seconds_remaining, paused, rolling_scores, epsilon_percentages),
-            True,
-            TEXT_COLOR,
-        )
-        self._surface.blit(hud_surface, (10, 10))
+        hud_text = self._hud_text(players, round_seconds_remaining, paused, rolling_scores, epsilon_percentages)
+        if not hud_text:
+            return
+        line_height = self._font.get_linesize()
+        for index, line in enumerate(hud_text.splitlines()):
+            hud_surface = self._font.render(line, True, TEXT_COLOR)
+            self._surface.blit(hud_surface, (10, 10 + index * line_height))
 
     def _hud_text(
         self,
@@ -110,19 +111,18 @@ class Renderer:
     ) -> str:
         epsilon_lookup = epsilon_percentages or {}
         rolling_lookup = rolling_scores or {}
-        player_scores = ", ".join(
+        player_lines = [
             self._player_fragment(
                 player,
                 rolling_lookup.get(player.identifier),
                 epsilon_lookup.get(player.identifier),
             )
             for player in players
-        )
+        ]
         seconds = max(0, int(seconds_remaining))
-        fragments = [f"{seconds}s"]
-        if player_scores:
-            fragments.append(player_scores)
-        return " | ".join(fragments)
+        lines = [f"{seconds}s"]
+        lines.extend(player_lines)
+        return "\n".join(lines)
 
     def _player_fragment(
         self,

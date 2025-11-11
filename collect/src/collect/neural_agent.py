@@ -22,7 +22,7 @@ class NeuralPolicyAgent:
 
     state_size: int
     action_size: int
-    hidden_size: int = 128
+    hidden_size: int = 16
     hidden_layers: int = 2
     learning_rate: float = 0.01
     epsilon_start: float = 0.6

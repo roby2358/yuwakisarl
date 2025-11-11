@@ -17,5 +17,5 @@ def test_renderer_hud_text_formats_player_epsilon() -> None:
         epsilon_percentages={1: 25.5},
     )
 
-    assert text == "12s | 1: 3/20 25.5%"
+    assert text == "12s\n1: 3/20 25.5%"
 

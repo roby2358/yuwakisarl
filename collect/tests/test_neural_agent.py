@@ -10,20 +10,20 @@ from collect.types import Observation
 def test_neural_policy_agent_uses_configured_architecture() -> None:
     agent = NeuralPolicyAgent(state_size=9, action_size=9)
 
-    assert agent.hidden_size == 128
+    assert agent.hidden_size == 16
     assert agent.hidden_layers == 2
 
     weights = agent._weights  # pylint: disable=protected-access
     biases = agent._biases  # pylint: disable=protected-access
 
     assert len(weights) == agent.hidden_layers + 1 == 3
-    assert weights[0].shape == (9, 128)
-    assert weights[1].shape == (128, 128)
-    assert weights[2].shape == (128, 9)
+    assert weights[0].shape == (9, 16)
+    assert weights[1].shape == (16, 16)
+    assert weights[2].shape == (16, 9)
 
     assert len(biases) == agent.hidden_layers + 1 == 3
-    assert biases[0].shape == (128,)
-    assert biases[1].shape == (128,)
+    assert biases[0].shape == (16,)
+    assert biases[1].shape == (16,)
     assert biases[-1].shape == (9,)
 
     sample_state = np.zeros(9, dtype=np.float32)
