@@ -41,6 +41,7 @@ class Renderer:
         paused: bool,
         rolling_scores: dict[int, int] | None = None,
         epsilon_percentages: dict[int, float] | None = None,
+        rolling_rewards: dict[int, float] | None = None,
     ) -> None:
         self._surface.blit(self._grid_surface, (0, 0))
         for player in players:
@@ -48,7 +49,14 @@ class Renderer:
         self._draw_resources(resources)
         self._draw_target(target)
         self._draw_monster(monster)
-        self._draw_hud(players, round_seconds_remaining, paused, rolling_scores, epsilon_percentages)
+        self._draw_hud(
+            players,
+            round_seconds_remaining,
+            paused,
+            rolling_scores,
+            epsilon_percentages,
+            rolling_rewards,
+        )
         pygame.display.flip()
 
     def _build_grid_surface(self) -> pygame.Surface:
@@ -92,8 +100,16 @@ class Renderer:
         paused: bool,
         rolling_scores: dict[int, int] | None,
         epsilon_percentages: dict[int, float] | None,
+        rolling_rewards: dict[int, float] | None,
     ) -> None:
-        hud_text = self._hud_text(players, round_seconds_remaining, paused, rolling_scores, epsilon_percentages)
+        hud_text = self._hud_text(
+            players,
+            round_seconds_remaining,
+            paused,
+            rolling_scores,
+            epsilon_percentages,
+            rolling_rewards,
+        )
         if not hud_text:
             return
         line_height = self._font.get_linesize()
@@ -108,14 +124,17 @@ class Renderer:
         paused: bool,
         rolling_scores: dict[int, int] | None,
         epsilon_percentages: dict[int, float] | None,
+        rolling_rewards: dict[int, float] | None = None,
     ) -> str:
         epsilon_lookup = epsilon_percentages or {}
         rolling_lookup = rolling_scores or {}
+        reward_lookup = rolling_rewards or {}
         player_lines = [
             self._player_fragment(
                 player,
                 rolling_lookup.get(player.identifier),
                 epsilon_lookup.get(player.identifier),
+                reward_lookup.get(player.identifier),
             )
             for player in players
         ]
@@ -129,13 +148,17 @@ class Renderer:
         player: Player,
         rolling_total: int | None,
         epsilon_percent: float | None,
+        rolling_reward: float | None,
     ) -> str:
-        fragment = f"{player.identifier}: {player.score}"
+        base = f"{player.identifier}: {player.score}"
         if rolling_total is not None:
-            fragment = f"{player.identifier}: {rolling_total}/{player.score}"
-        if epsilon_percent is None:
-            return fragment
-        return f"{fragment} {epsilon_percent:.1f}%"
+            base = f"{player.identifier}: {rolling_total}/{player.score}"
+        fragments = [base]
+        if epsilon_percent is not None:
+            fragments.append(f"{epsilon_percent:.1f}%")
+        if rolling_reward is not None:
+            fragments.append(f"rr:{rolling_reward:+.2f}")
+        return " ".join(fragments)
 
     def _cell_to_pixels(self, cell: tuple[int, int]) -> tuple[int, int]:
         cx, cy = cell

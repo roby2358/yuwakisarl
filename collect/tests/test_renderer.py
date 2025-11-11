@@ -15,7 +15,8 @@ def test_renderer_hud_text_formats_player_epsilon() -> None:
         paused=False,
         rolling_scores={1: 3},
         epsilon_percentages={1: 25.5},
+        rolling_rewards={1: -2.0},
     )
 
-    assert text == "12s\n1: 3/20 25.5%"
+    assert text == "12s\n1: 3/20 25.5% rr:-2.00"
 

@@ -23,6 +23,7 @@ from .config import (
 )
 from .game_state import GameState
 from .human_controller import HumanController
+from .rolling_reward import RollingReward
 from .rolling_score import RollingScore
 from .renderer import Renderer
 from .types import Action, ControllerType, Observation, Player
@@ -42,6 +43,7 @@ class Game:
 
     _RANDOMIZATION_INTERVAL_SECONDS = 5 * 60.0
     _ROLLING_SCORE_WINDOW_SECONDS = 5 * 60.0
+    _ROLLING_REWARD_WINDOW_SECONDS = 5 * 60.0
 
     def __init__(self, player_count: int = DEFAULT_PLAYER_COUNT) -> None:
         if pygame is None:
@@ -66,6 +68,7 @@ class Game:
         self._running = True
         self._next_randomization_time = time.time() + self._RANDOMIZATION_INTERVAL_SECONDS
         self._rolling_score = RollingScore(self._ROLLING_SCORE_WINDOW_SECONDS)
+        self._rolling_reward = RollingReward(self._ROLLING_REWARD_WINDOW_SECONDS)
 
     def run(self) -> None:
         while self._running:
@@ -91,8 +94,10 @@ class Game:
                     break
                 self._maybe_randomize_lowest_agent(time.time())
                 if paused:
+                    current_time = time.time()
                     epsilon_status = self._epsilon_by_player()
-                    rolling_status = self._rolling_scores_by_player(time.time())
+                    rolling_status = self._rolling_scores_by_player(current_time)
+                    reward_status = self._rolling_rewards_by_player(current_time)
                     self._renderer.draw(
                         self._state.players,
                         self._state.resources,
@@ -102,6 +107,7 @@ class Game:
                         paused,
                         rolling_status,
                         epsilon_status,
+                        reward_status,
                     )
                     self._clock.tick(FRAME_RATE)
                     continue
@@ -109,8 +115,10 @@ class Game:
                 remaining_time = max(0.0, round_end_time - time.time())
                 is_terminal = remaining_time <= 0.0
                 self._apply_agent_feedback(feedback, is_terminal)
+                current_time = time.time()
                 epsilon_status = self._epsilon_by_player()
-                rolling_status = self._rolling_scores_by_player(time.time())
+                rolling_status = self._rolling_scores_by_player(current_time)
+                reward_status = self._rolling_rewards_by_player(current_time)
                 self._renderer.draw(
                     self._state.players,
                     self._state.resources,
@@ -120,6 +128,7 @@ class Game:
                     paused,
                     rolling_status,
                     epsilon_status,
+                    reward_status,
                 )
                 self._clock.tick(FRAME_RATE)
                 if is_terminal:
@@ -176,6 +185,7 @@ class Game:
             score_delta = updated_player.score - player.score
             if score_delta > 0:
                 self._rolling_score.record(player.identifier, time.time(), score_delta)
+            self._rolling_reward.record(player.identifier, time.time(), reward)
             controller = self._ai_controllers.get(player.identifier)
             if controller is not None and self._human_player_identifier != player.identifier:
                 next_observation = Observation(
@@ -226,9 +236,11 @@ class Game:
                     else:
                         self._running = False
                         break
-            remaining = end_time - time.time()
+            current_time = time.time()
+            remaining = end_time - current_time
             epsilon_status = self._epsilon_by_player()
-            rolling_status = self._rolling_scores_by_player(time.time())
+            rolling_status = self._rolling_scores_by_player(current_time)
+            reward_status = self._rolling_rewards_by_player(current_time)
             self._renderer.draw(
                 self._state.players,
                 self._state.resources,
@@ -238,6 +250,7 @@ class Game:
                 paused=True,
                 rolling_scores=rolling_status,
                 epsilon_percentages=epsilon_status,
+                rolling_rewards=reward_status,
             )
             self._clock.tick(FRAME_RATE)
 
@@ -272,6 +285,12 @@ class Game:
         if not hasattr(self, "_rolling_score"):
             return None
         totals = self._rolling_score.totals(current_time)
+        if not totals:
+            return None
+        return totals
+
+    def _rolling_rewards_by_player(self, current_time: float) -> dict[int, float] | None:
+        totals = self._rolling_reward.totals(current_time)
         if not totals:
             return None
         return totals
