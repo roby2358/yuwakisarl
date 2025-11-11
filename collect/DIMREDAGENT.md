@@ -11,3 +11,11 @@
 - **Action head:** Split the final `1 x 64` activation into two separate linear heads, each producing three logits—one head for `dx`, one for `dy`. Each head applies a `softmax` to obtain a categorical distribution over `{ -1, 0, +1 }`.
 - **Action selection:** Take the `argmax` of each categorical distribution to obtain deterministic `dx` and `dy` deltas.
 - **Training:** Optimize all parameters end-to-end with backpropagation. Use cross-entropy loss for each axis against observed `dx` and `dy` targets. Collect on-policy gameplay rollouts (no replay buffer yet), form minibatches, and update with stochastic gradient descent or Adam.
+
+## Critique
+
+- **Limited representation power:** The repeated linear projections with `tanh` activations provide only a shallow nonlinearity. Without additional depth or richer feature mixing, the model may struggle with complex spatial patterns.
+- **Rigid action discretization:** Encoding movement as per-axis categorical choices in `{ -1, 0, +1 }` enforces deterministic, axis-aligned steps. This could cap maneuverability or make diagonal reasoning indirect.
+- **No replay buffer:** Training purely on on-policy rollouts risks high variance updates and instability if the policy oscillates or the environment is noisy.
+- **Dimensionality bottleneck:** The heavy reduction from `d` to 3 dimensions, then up to 64, assumes critical information survives the compressions. If the initial projections miss key structure, later layers cannot recover it.
+- **Hyperparameter ambiguity:** The approach depends on careful initialization and learning-rate tuning. The spec does not yet prescribe defaults, so reproducibility across runs may be inconsistent.
