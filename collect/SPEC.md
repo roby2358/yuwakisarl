@@ -48,7 +48,7 @@ This is a reinforcement learning experiment called "Collect".
 - MUST time each round to `ROUND_SECONDS` (24 hours) and follow it with a `ROUND_BREAK_SECONDS` (10 seconds) intermission before resetting.
 - MUST support `Space` to pause/resume the active round without advancing game state.
 - MUST interpret a single `Esc` press as ending the current round and a second consecutive `Esc` as terminating the program.
-- SHOULD redraw the board while paused, overlaying HUD text indicating state, remaining time, and scores.
+- SHOULD redraw the board while paused, overlaying HUD text indicating remaining time and scores.
 
 ## AI Controllers
 - MUST provide one `AIController` instance per player that accepts `collect.types.Observation` snapshots each tick.

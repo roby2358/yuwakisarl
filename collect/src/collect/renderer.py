@@ -119,11 +119,10 @@ class Renderer:
             for player in players
         )
         seconds = max(0, int(seconds_remaining))
-        status = "paused" if paused else "running"
-        time_fragment = f"time {seconds}s"
-        if not player_scores:
-            return f"{status} | {time_fragment}"
-        return f"{status} | {time_fragment} | {player_scores}"
+        fragments = [f"{seconds}s"]
+        if player_scores:
+            fragments.append(player_scores)
+        return " | ".join(fragments)
 
     def _player_fragment(
         self,
