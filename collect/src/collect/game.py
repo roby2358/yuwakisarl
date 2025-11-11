@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import random
 import time
 from dataclasses import dataclass
-import random
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -23,6 +23,7 @@ from .config import (
 )
 from .game_state import GameState
 from .human_controller import HumanController
+from .rolling_score import RollingScore
 from .renderer import Renderer
 from .types import Action, ControllerType, Observation, Player
 
@@ -40,6 +41,7 @@ class Game:
     """Encapsulates the Collect game runtime."""
 
     _RANDOMIZATION_INTERVAL_SECONDS = 5 * 60.0
+    _ROLLING_SCORE_WINDOW_SECONDS = 5 * 60.0
 
     def __init__(self, player_count: int = DEFAULT_PLAYER_COUNT) -> None:
         if pygame is None:
@@ -63,6 +65,7 @@ class Game:
         }
         self._running = True
         self._next_randomization_time = time.time() + self._RANDOMIZATION_INTERVAL_SECONDS
+        self._rolling_score = RollingScore(self._ROLLING_SCORE_WINDOW_SECONDS)
 
     def run(self) -> None:
         while self._running:
@@ -89,6 +92,7 @@ class Game:
                 self._maybe_randomize_lowest_agent(time.time())
                 if paused:
                     epsilon_status = self._epsilon_by_player()
+                    rolling_status = self._rolling_scores_by_player(time.time())
                     self._renderer.draw(
                         self._state.players,
                         self._state.resources,
@@ -96,6 +100,7 @@ class Game:
                         self._state.target,
                         remaining_time,
                         paused,
+                        rolling_status,
                         epsilon_status,
                     )
                     self._clock.tick(FRAME_RATE)
@@ -105,6 +110,7 @@ class Game:
                 is_terminal = remaining_time <= 0.0
                 self._apply_agent_feedback(feedback, is_terminal)
                 epsilon_status = self._epsilon_by_player()
+                rolling_status = self._rolling_scores_by_player(time.time())
                 self._renderer.draw(
                     self._state.players,
                     self._state.resources,
@@ -112,6 +118,7 @@ class Game:
                     self._state.target,
                     remaining_time,
                     paused,
+                    rolling_status,
                     epsilon_status,
                 )
                 self._clock.tick(FRAME_RATE)
@@ -165,6 +172,10 @@ class Game:
             )
             action = self._select_action(player, pressed, controller, observation)
             reward = self._state.update_player(index, action)
+            updated_player = self._state.players[index]
+            score_delta = updated_player.score - player.score
+            if score_delta > 0:
+                self._rolling_score.record(player.identifier, time.time(), score_delta)
             controller = self._ai_controllers.get(player.identifier)
             if controller is not None and self._human_player_identifier != player.identifier:
                 next_observation = Observation(
@@ -217,6 +228,7 @@ class Game:
                         break
             remaining = end_time - time.time()
             epsilon_status = self._epsilon_by_player()
+            rolling_status = self._rolling_scores_by_player(time.time())
             self._renderer.draw(
                 self._state.players,
                 self._state.resources,
@@ -224,6 +236,7 @@ class Game:
                 self._state.target,
                 remaining,
                 paused=True,
+                rolling_scores=rolling_status,
                 epsilon_percentages=epsilon_status,
             )
             self._clock.tick(FRAME_RATE)
@@ -255,6 +268,14 @@ class Game:
             return None
         return values
 
+    def _rolling_scores_by_player(self, current_time: float) -> dict[int, int] | None:
+        if not hasattr(self, "_rolling_score"):
+            return None
+        totals = self._rolling_score.totals(current_time)
+        if not totals:
+            return None
+        return totals
+
     def _maybe_randomize_lowest_agent(self, current_time: float) -> None:
         if not hasattr(self, "_next_randomization_time"):
             self._next_randomization_time = current_time + self._RANDOMIZATION_INTERVAL_SECONDS
@@ -276,12 +297,28 @@ class Game:
             controller = self._ai_controllers.get(player.identifier)
             if controller is None:
                 continue
-            score_with_jitter = float(player.score) + random.random()
+            rolling_total = (
+                float(self._rolling_score.total(player.identifier, current_time))
+                if hasattr(self, "_rolling_score")
+                else 0.0
+            )
+            score_with_jitter = rolling_total + random.random()
             candidates.append((score_with_jitter, controller))
         if not candidates:
             return
         candidates.sort(key=lambda entry: entry[0])
         controller = candidates[0][1]
-        if hasattr(controller, "randomize_agent"):
+        if hasattr(controller, "randomize_agent_percentile"):
+            controller.randomize_agent_percentile(50.0)
+        elif hasattr(controller, "randomize_agent"):
             controller.randomize_agent()
+
+        remaining_controllers = [entry[1] for entry in candidates[1:]]
+        if not remaining_controllers:
+            return
+        selected = random.choice(remaining_controllers)
+        if hasattr(selected, "randomize_agent_percentile"):
+            selected.randomize_agent_percentile(20.0)
+        elif hasattr(selected, "randomize_agent"):
+            selected.randomize_agent()
 

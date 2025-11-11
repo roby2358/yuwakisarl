@@ -39,6 +39,7 @@ class Renderer:
         target: tuple[int, int],
         round_seconds_remaining: float,
         paused: bool,
+        rolling_scores: dict[int, int] | None = None,
         epsilon_percentages: dict[int, float] | None = None,
     ) -> None:
         self._surface.blit(self._grid_surface, (0, 0))
@@ -47,7 +48,7 @@ class Renderer:
         self._draw_resources(resources)
         self._draw_target(target)
         self._draw_monster(monster)
-        self._draw_hud(players, round_seconds_remaining, paused, epsilon_percentages)
+        self._draw_hud(players, round_seconds_remaining, paused, rolling_scores, epsilon_percentages)
         pygame.display.flip()
 
     def _build_grid_surface(self) -> pygame.Surface:
@@ -89,10 +90,11 @@ class Renderer:
         players: tuple[Player, ...],
         round_seconds_remaining: float,
         paused: bool,
+        rolling_scores: dict[int, int] | None,
         epsilon_percentages: dict[int, float] | None,
     ) -> None:
         hud_surface = self._font.render(
-            self._hud_text(players, round_seconds_remaining, paused, epsilon_percentages),
+            self._hud_text(players, round_seconds_remaining, paused, rolling_scores, epsilon_percentages),
             True,
             TEXT_COLOR,
         )
@@ -103,11 +105,17 @@ class Renderer:
         players: tuple[Player, ...],
         seconds_remaining: float,
         paused: bool,
+        rolling_scores: dict[int, int] | None,
         epsilon_percentages: dict[int, float] | None,
     ) -> str:
         epsilon_lookup = epsilon_percentages or {}
+        rolling_lookup = rolling_scores or {}
         player_scores = ", ".join(
-            self._player_fragment(player, epsilon_lookup.get(player.identifier))
+            self._player_fragment(
+                player,
+                rolling_lookup.get(player.identifier),
+                epsilon_lookup.get(player.identifier),
+            )
             for player in players
         )
         seconds = max(0, int(seconds_remaining))
@@ -117,8 +125,15 @@ class Renderer:
             return f"{status} | {time_fragment}"
         return f"{status} | {time_fragment} | {player_scores}"
 
-    def _player_fragment(self, player: Player, epsilon_percent: float | None) -> str:
+    def _player_fragment(
+        self,
+        player: Player,
+        rolling_total: int | None,
+        epsilon_percent: float | None,
+    ) -> str:
         fragment = f"{player.identifier}: {player.score}"
+        if rolling_total is not None:
+            fragment = f"{player.identifier}: {rolling_total}/{player.score}"
         if epsilon_percent is None:
             return fragment
         return f"{fragment} {epsilon_percent:.1f}%"

@@ -88,9 +88,29 @@ def test_game_epsilon_by_player_returns_mapping() -> None:
 class _StubController:
     def __init__(self) -> None:
         self.randomized = False
+        self.called_percentiles: list[float | None] = []
 
     def randomize_agent(self) -> None:
         self.randomized = True
+        self.called_percentiles.append(None)
+
+    def randomize_agent_percentile(self, percentile: float) -> None:
+        self.randomized = True
+        self.called_percentiles.append(percentile)
+
+
+class _StubRollingScore:
+    def __init__(self, values: dict[int, int] | None = None) -> None:
+        self.values = values or {}
+
+    def record(self, player_identifier: int, timestamp: float, count: int = 1) -> None:  # pragma: no cover - stub
+        pass
+
+    def total(self, player_identifier: int, current_time: float) -> int:
+        return self.values.get(player_identifier, 0)
+
+    def totals(self, current_time: float) -> dict[int, int]:
+        return dict(self.values)
 
 
 def test_game_randomize_lowest_agent_respects_interval(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,6 +121,7 @@ def test_game_randomize_lowest_agent_respects_interval(monkeypatch: pytest.Monke
     )
     jitter_values = iter([0.2, 0.8, 0.1])
     monkeypatch.setattr(game_module.random, "random", lambda: next(jitter_values))
+    monkeypatch.setattr(game_module.random, "choice", lambda seq: seq[-1])
 
     game = Game.__new__(Game)
     game._state = SimpleNamespace(players=players)
@@ -111,12 +132,18 @@ def test_game_randomize_lowest_agent_respects_interval(monkeypatch: pytest.Monke
     }
     game._human_player_identifier = None
     game._next_randomization_time = 0.0
+    game._rolling_score = _StubRollingScore({0: 4, 1: 1, 2: 0})
 
     game._maybe_randomize_lowest_agent(0.0)
 
     assert game._ai_controllers[2].randomized is True
+    assert game._ai_controllers[0].randomized is True
     assert game._ai_controllers[1].randomized is False
-    assert game._ai_controllers[0].randomized is False
+    assert len(game._ai_controllers[2].called_percentiles) == 1
+    assert game._ai_controllers[2].called_percentiles[0] == pytest.approx(50.0)
+    assert len(game._ai_controllers[0].called_percentiles) == 1
+    assert game._ai_controllers[0].called_percentiles[0] == pytest.approx(20.0)
+    assert game._ai_controllers[1].called_percentiles == []
     assert game._next_randomization_time == pytest.approx(Game._RANDOMIZATION_INTERVAL_SECONDS)
 
 
@@ -130,8 +157,35 @@ def test_game_randomize_lowest_agent_waits_for_interval() -> None:
     game._ai_controllers = {0: controller}
     game._human_player_identifier = None
     game._next_randomization_time = 100.0
+    game._rolling_score = _StubRollingScore({0: 2})
 
     game._maybe_randomize_lowest_agent(50.0)
 
     assert controller.randomized is False
+
+
+def test_game_randomize_lowest_agent_single_candidate(monkeypatch: pytest.MonkeyPatch) -> None:
+    players = (
+        Player(identifier=0, position=(0, 0), controller=ControllerType.AI, score=2),
+    )
+    game = Game.__new__(Game)
+    game._state = SimpleNamespace(players=players)
+    controller = _StubController()
+    game._ai_controllers = {0: controller}
+    game._human_player_identifier = None
+    game._next_randomization_time = 0.0
+    game._rolling_score = _StubRollingScore({0: 0})
+
+    monkeypatch.setattr(game_module.random, "random", lambda: 0.5)
+
+    def choice_fail(seq):  # pragma: no cover - sanity guard
+        raise AssertionError("random.choice should not be invoked when only one candidate exists")
+
+    monkeypatch.setattr(game_module.random, "choice", choice_fail)
+
+    game._maybe_randomize_lowest_agent(0.0)
+
+    assert controller.randomized is True
+    assert len(controller.called_percentiles) == 1
+    assert controller.called_percentiles[0] == pytest.approx(50.0)
 

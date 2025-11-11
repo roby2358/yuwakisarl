@@ -136,3 +136,13 @@ class AIController:
         if callable(reset):
             reset()
 
+    def randomize_agent_percentile(self, percentile: float) -> None:
+        agent = self._agent
+        if agent is None:
+            return
+        randomize = getattr(agent, "randomize_percentile_weights", None)
+        if callable(randomize):
+            randomize(percentile)
+            return
+        self.randomize_agent()
+

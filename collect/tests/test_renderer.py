@@ -9,7 +9,13 @@ def test_renderer_hud_text_formats_player_epsilon() -> None:
     players = (
         Player(identifier=1, position=(0, 0), controller=ControllerType.AI, score=20),
     )
-    text = renderer._hud_text(players, seconds_remaining=12.7, paused=False, epsilon_percentages={1: 25.5})
+    text = renderer._hud_text(
+        players,
+        seconds_remaining=12.7,
+        paused=False,
+        rolling_scores={1: 3},
+        epsilon_percentages={1: 25.5},
+    )
 
-    assert text == "running | time 12s | 1: 20 25.5%"
+    assert text == "running | time 12s | 1: 3/20 25.5%"
 
