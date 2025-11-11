@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+import random
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -38,6 +39,8 @@ class AgentFeedback:
 class Game:
     """Encapsulates the Collect game runtime."""
 
+    _RANDOMIZATION_INTERVAL_SECONDS = 5 * 60.0
+
     def __init__(self, player_count: int = DEFAULT_PLAYER_COUNT) -> None:
         if pygame is None:
             raise RuntimeError("pygame is required to run the Collect game loop; install pygame to continue")
@@ -59,6 +62,7 @@ class Game:
             for player in self._state.players
         }
         self._running = True
+        self._next_randomization_time = time.time() + self._RANDOMIZATION_INTERVAL_SECONDS
 
     def run(self) -> None:
         while self._running:
@@ -82,6 +86,7 @@ class Game:
                             break
                 if not round_active or not self._running:
                     break
+                self._maybe_randomize_lowest_agent(time.time())
                 if paused:
                     epsilon_status = self._epsilon_by_player()
                     self._renderer.draw(
@@ -249,4 +254,34 @@ class Game:
         if not values:
             return None
         return values
+
+    def _maybe_randomize_lowest_agent(self, current_time: float) -> None:
+        if not hasattr(self, "_next_randomization_time"):
+            self._next_randomization_time = current_time + self._RANDOMIZATION_INTERVAL_SECONDS
+            return
+        if current_time < self._next_randomization_time:
+            return
+        self._next_randomization_time = current_time + self._RANDOMIZATION_INTERVAL_SECONDS
+        if not hasattr(self, "_state"):
+            return
+        if not hasattr(self, "_ai_controllers"):
+            return
+        players = getattr(self._state, "players", ())
+        if not players:
+            return
+        candidates: List[Tuple[float, AIController]] = []
+        for player in players:
+            if self._human_player_identifier == player.identifier:
+                continue
+            controller = self._ai_controllers.get(player.identifier)
+            if controller is None:
+                continue
+            score_with_jitter = float(player.score) + random.random()
+            candidates.append((score_with_jitter, controller))
+        if not candidates:
+            return
+        candidates.sort(key=lambda entry: entry[0])
+        controller = candidates[0][1]
+        if hasattr(controller, "randomize_agent"):
+            controller.randomize_agent()
 

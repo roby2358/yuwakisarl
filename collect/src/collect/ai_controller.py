@@ -124,3 +124,15 @@ class AIController:
             return float(epsilon)
         return None
 
+    def randomize_agent(self) -> None:
+        agent = self._agent
+        if agent is None:
+            return
+        randomize = getattr(agent, "randomize_weights", None)
+        if callable(randomize):
+            randomize()
+            return
+        reset = getattr(agent, "reset", None)
+        if callable(reset):
+            reset()
+

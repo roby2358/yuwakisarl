@@ -42,27 +42,7 @@ class NeuralPolicyAgent:
             raise ValueError(msg)
 
         rng = np.random.default_rng()
-        weights = []
-        biases = []
-
-        fan_in = self.state_size
-        for _ in range(self.hidden_layers):
-            layer_scale = math.sqrt(2.0 / max(1, fan_in))
-            weight = rng.normal(0.0, layer_scale, size=(fan_in, self.hidden_size)).astype(np.float32)
-            bias = rng.normal(0.0, layer_scale, size=self.hidden_size).astype(np.float32)
-            weights.append(weight)
-            biases.append(bias)
-            fan_in = self.hidden_size
-
-        output_scale = math.sqrt(2.0 / max(1, fan_in))
-        output_weight = rng.normal(0.0, output_scale, size=(fan_in, self.action_size)).astype(np.float32)
-        output_bias = np.zeros(self.action_size, dtype=np.float32)
-
-        weights.append(output_weight)
-        biases.append(output_bias)
-
-        self._weights = tuple(weights)
-        self._biases = tuple(biases)
+        self._weights, self._biases = self._initialize_parameters(rng)
 
     def act(self, state: Sequence[float], actor_id: int = 0) -> int:
         state_vector = np.asarray(state, dtype=np.float32)
@@ -138,5 +118,107 @@ class NeuralPolicyAgent:
     def _decay_epsilon(self, actor_id: int) -> None:
         current = self._epsilon_for(actor_id)
         self._epsilon_values[actor_id] = max(self.epsilon_min, current * self.epsilon_decay)
+
+    def randomize_weights(self) -> None:
+        rng = np.random.default_rng()
+        self._weights, self._biases = self._initialize_parameters(rng)
+        self._reset_exploration_rates()
+
+    def randomize_percentile_weights(self, percentile: float) -> None:
+        if percentile <= 0.0:
+            return
+        if percentile >= 100.0:
+            self.randomize_weights()
+            return
+
+        flat_abs = [
+            np.abs(layer).ravel()
+            for layer in (*self._weights, *self._biases)
+        ]
+        if not flat_abs:
+            return
+
+        combined = np.concatenate(flat_abs)
+        if combined.size == 0:
+            return
+
+        threshold = float(np.percentile(combined, percentile))
+        rng = np.random.default_rng()
+
+        updated_weights = []
+        updated_biases = []
+        fan_in = self.state_size
+
+        for layer_index in range(self.hidden_layers):
+            weight = self._weights[layer_index].copy()
+            bias = self._biases[layer_index].copy()
+            layer_scale = self._layer_scale(fan_in)
+
+            mask = np.abs(weight) <= threshold
+            if np.any(mask):
+                weight[mask] = rng.normal(0.0, layer_scale, size=int(np.count_nonzero(mask))).astype(np.float32)
+
+            bias_mask = np.abs(bias) <= threshold
+            if np.any(bias_mask):
+                bias[bias_mask] = rng.normal(0.0, layer_scale, size=int(np.count_nonzero(bias_mask))).astype(np.float32)
+
+            updated_weights.append(weight.astype(np.float32, copy=False))
+            updated_biases.append(bias.astype(np.float32, copy=False))
+            fan_in = self.hidden_size
+
+        output_weight = self._weights[-1].copy()
+        output_bias = self._biases[-1].copy()
+        output_scale = self._layer_scale(fan_in)
+
+        mask = np.abs(output_weight) <= threshold
+        if np.any(mask):
+            output_weight[mask] = rng.normal(0.0, output_scale, size=int(np.count_nonzero(mask))).astype(np.float32)
+
+        bias_mask = np.abs(output_bias) <= threshold
+        if np.any(bias_mask):
+            output_bias[bias_mask] = rng.normal(0.0, output_scale, size=int(np.count_nonzero(bias_mask))).astype(np.float32)
+
+        updated_weights.append(output_weight.astype(np.float32, copy=False))
+        updated_biases.append(output_bias.astype(np.float32, copy=False))
+
+        self._weights = tuple(updated_weights)
+        self._biases = tuple(updated_biases)
+        self._reset_exploration_rates()
+
+    def _initialize_parameters(
+        self,
+        rng: np.random.Generator,
+    ) -> tuple[tuple[np.ndarray, ...], tuple[np.ndarray, ...]]:
+        weights = []
+        biases = []
+
+        fan_in = self.state_size
+        for _ in range(self.hidden_layers):
+            scale = self._layer_scale(fan_in)
+            weight = rng.normal(0.0, scale, size=(fan_in, self.hidden_size)).astype(np.float32)
+            bias = rng.normal(0.0, scale, size=self.hidden_size).astype(np.float32)
+            weights.append(weight)
+            biases.append(bias)
+            fan_in = self.hidden_size
+
+        output_scale = self._layer_scale(fan_in)
+        output_weight = rng.normal(0.0, output_scale, size=(fan_in, self.action_size)).astype(np.float32)
+        output_bias = rng.normal(0.0, output_scale, size=self.action_size).astype(np.float32)
+
+        weights.append(output_weight)
+        biases.append(output_bias)
+
+        return tuple(weights), tuple(biases)
+
+    @staticmethod
+    def _layer_scale(fan_in: int) -> float:
+        if fan_in <= 0:
+            return 1.0
+        return math.sqrt(2.0 / fan_in)
+
+    def _reset_exploration_rates(self) -> None:
+        if not self._epsilon_values:
+            return
+        self._epsilon_values = {actor_id: self.epsilon_start for actor_id in self._epsilon_values}
 
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 import pytest
 
+import collect.game as game_module
 from collect.ai_controller import AIController
 from collect.game import AgentFeedback, Game
 from collect.neural_agent import NeuralPolicyAgent
@@ -81,4 +83,55 @@ def test_game_epsilon_by_player_returns_mapping() -> None:
     assert epsilon_map is not None
     assert epsilon_map[0] == pytest.approx(40.0)
     assert epsilon_map[1] == pytest.approx(20.0)
+
+
+class _StubController:
+    def __init__(self) -> None:
+        self.randomized = False
+
+    def randomize_agent(self) -> None:
+        self.randomized = True
+
+
+def test_game_randomize_lowest_agent_respects_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    players = (
+        Player(identifier=0, position=(0, 0), controller=ControllerType.AI, score=5),
+        Player(identifier=1, position=(0, 0), controller=ControllerType.AI, score=1),
+        Player(identifier=2, position=(0, 0), controller=ControllerType.AI, score=1),
+    )
+    jitter_values = iter([0.2, 0.8, 0.1])
+    monkeypatch.setattr(game_module.random, "random", lambda: next(jitter_values))
+
+    game = Game.__new__(Game)
+    game._state = SimpleNamespace(players=players)
+    game._ai_controllers = {
+        0: _StubController(),
+        1: _StubController(),
+        2: _StubController(),
+    }
+    game._human_player_identifier = None
+    game._next_randomization_time = 0.0
+
+    game._maybe_randomize_lowest_agent(0.0)
+
+    assert game._ai_controllers[2].randomized is True
+    assert game._ai_controllers[1].randomized is False
+    assert game._ai_controllers[0].randomized is False
+    assert game._next_randomization_time == pytest.approx(Game._RANDOMIZATION_INTERVAL_SECONDS)
+
+
+def test_game_randomize_lowest_agent_waits_for_interval() -> None:
+    players = (
+        Player(identifier=0, position=(0, 0), controller=ControllerType.AI, score=0),
+    )
+    game = Game.__new__(Game)
+    game._state = SimpleNamespace(players=players)
+    controller = _StubController()
+    game._ai_controllers = {0: controller}
+    game._human_player_identifier = None
+    game._next_randomization_time = 100.0
+
+    game._maybe_randomize_lowest_agent(50.0)
+
+    assert controller.randomized is False
 

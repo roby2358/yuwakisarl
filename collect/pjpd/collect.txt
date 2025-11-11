@@ -1,7 +1,27 @@
+Priority:   70
+Status: ToDo
+ID: task-nmza
+Perform a 5-minute re-randomization of 0-score agents
+---
+Priority:   70
+Status: ToDo
+ID: task-pfd6
+Perform a 5-minute re-randomization of the lowest scoring agent
+---
+Priority:   70
+Status: ToDo
+ID: task-jt53
+Re-randomize the lowest quartile of NN weights in the second lowest scoring agent
+---
 Priority:   60
 Status: ToDo
 ID: rltrace-vu5h
 Extend `NeuralPolicyAgent` to support discounted or n-step returns by retaining short trajectories (not just the last action) so rewards propagate across sequences, and add unit tests that fail under the current single-step trace.
+---
+Priority:   60
+Status: ToDo
+ID: task-wsui
+Implement DIMREDAGENT.md plan in custom words
 ---
 Priority:   45
 Status: ToDo

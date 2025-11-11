@@ -168,3 +168,72 @@ def test_neural_policy_agent_tracks_epsilon_per_actor_independently():
 
     assert agent.exploration_rate(1) == pytest.approx(max(agent.epsilon_min, 1.0 * agent.epsilon_decay))
     assert agent.exploration_rate(2) == pytest.approx(0.25)
+
+
+def test_randomize_weights_resets_all_parameters() -> None:
+    agent = NeuralPolicyAgent(state_size=8, action_size=4, hidden_size=6, hidden_layers=2)
+
+    agent._weights = tuple(np.full_like(weight, 0.5, dtype=np.float32) for weight in agent._weights)
+    agent._biases = tuple(np.full_like(bias, -0.25, dtype=np.float32) for bias in agent._biases)
+    agent._epsilon_values = {0: 0.2, 1: 0.1}
+
+    agent.randomize_weights()
+
+    for weight in agent._weights:
+        assert not np.allclose(weight, 0.5)
+
+    for bias in agent._biases:
+        assert not np.allclose(bias, -0.25)
+
+    assert all(rate == agent.epsilon_start for rate in agent._epsilon_values.values())
+
+
+def test_randomize_percentile_weights_updates_small_parameters() -> None:
+    agent = NeuralPolicyAgent(state_size=6, action_size=3, hidden_size=4, hidden_layers=1)
+
+    weight_hidden = np.linspace(-0.1, 0.1, num=24, dtype=np.float32).reshape(agent.state_size, agent.hidden_size)
+    bias_hidden = np.linspace(-0.05, 0.05, num=agent.hidden_size, dtype=np.float32)
+    weight_output = np.linspace(-0.2, 0.2, num=12, dtype=np.float32).reshape(agent.hidden_size, agent.action_size)
+    bias_output = np.linspace(-0.1, 0.1, num=agent.action_size, dtype=np.float32)
+
+    agent._weights = (weight_hidden.copy(), weight_output.copy())
+    agent._biases = (bias_hidden.copy(), bias_output.copy())
+    agent._epsilon_values = {0: 0.15}
+
+    flat_abs = np.concatenate(
+        [
+            np.abs(weight_hidden).ravel(),
+            np.abs(bias_hidden),
+            np.abs(weight_output).ravel(),
+            np.abs(bias_output),
+        ]
+    )
+
+    percentile = 40.0
+    threshold = float(np.percentile(flat_abs, percentile))
+
+    agent.randomize_percentile_weights(percentile)
+
+    hidden_mask = np.abs(weight_hidden) <= threshold
+    assert np.any(hidden_mask)
+
+    updated_weight_hidden = agent._weights[0]
+    assert not np.allclose(updated_weight_hidden[hidden_mask], weight_hidden[hidden_mask])
+    assert np.array_equal(updated_weight_hidden[~hidden_mask], weight_hidden[~hidden_mask])
+
+    hidden_bias_mask = np.abs(bias_hidden) <= threshold
+    updated_bias_hidden = agent._biases[0]
+    assert not np.allclose(updated_bias_hidden[hidden_bias_mask], bias_hidden[hidden_bias_mask])
+    assert np.array_equal(updated_bias_hidden[~hidden_bias_mask], bias_hidden[~hidden_bias_mask])
+
+    output_mask = np.abs(weight_output) <= threshold
+    updated_weight_output = agent._weights[-1]
+    assert not np.allclose(updated_weight_output[output_mask], weight_output[output_mask])
+    assert np.array_equal(updated_weight_output[~output_mask], weight_output[~output_mask])
+
+    output_bias_mask = np.abs(bias_output) <= threshold
+    updated_bias_output = agent._biases[-1]
+    assert not np.allclose(updated_bias_output[output_bias_mask], bias_output[output_bias_mask])
+    assert np.array_equal(updated_bias_output[~output_bias_mask], bias_output[~output_bias_mask])
+
+    assert all(rate == agent.epsilon_start for rate in agent._epsilon_values.values())
